@@ -64,8 +64,11 @@ export default function PortalLoginPage() {
     }
   };
 
-  const formatKey = (v: string) =>
-    v.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 19).replace(/(.{4})/g, "$1-").replace(/-$/, "");
+  const formatKey = (v: string) => {
+    const cleaned = v.toUpperCase().replace(/[^A-Z0-9]/g, "").replace(/^IMPERA/, "");
+    const body = cleaned.slice(0, 16).replace(/(.{4})/g, "$1-").replace(/-$/, "");
+    return `IMPERA-${body}`;
+  };
 
   const handleActivate = async (e: React.FormEvent) => {
     e.preventDefault();
