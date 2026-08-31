@@ -31,9 +31,19 @@ export const DEFAULT_INSTRUMENTS: Instrument[] = [
   { symbol: "GBPAUD", name: "British Pound / Australian Dollar", assetClass: "forex", baseDecimals: 5, pipSize: 0.0001, enabled: true },
   { symbol: "AUDCAD", name: "Australian Dollar / Canadian Dollar", assetClass: "forex", baseDecimals: 5, pipSize: 0.0001, enabled: true },
   { symbol: "NZDJPY", name: "NZD / Japanese Yen", assetClass: "forex", baseDecimals: 3, pipSize: 0.01, enabled: true },
+  { symbol: "CADCHF", name: "Canadian Dollar / Swiss Franc", assetClass: "forex", baseDecimals: 5, pipSize: 0.0001, enabled: true },
+  { symbol: "GBPCHF", name: "British Pound / Swiss Franc", assetClass: "forex", baseDecimals: 5, pipSize: 0.0001, enabled: true },
+  { symbol: "NZDCHF", name: "NZD / Swiss Franc", assetClass: "forex", baseDecimals: 5, pipSize: 0.0001, enabled: true },
+  { symbol: "AUDCHF", name: "Australian Dollar / Swiss Franc", assetClass: "forex", baseDecimals: 5, pipSize: 0.0001, enabled: true },
+  { symbol: "EURNZD", name: "Euro / NZ Dollar", assetClass: "forex", baseDecimals: 5, pipSize: 0.0001, enabled: true },
+  { symbol: "AUDNZD", name: "Australian Dollar / NZ Dollar", assetClass: "forex", baseDecimals: 5, pipSize: 0.0001, enabled: true },
 
   { symbol: "XAUUSD", name: "Gold", assetClass: "metals", baseDecimals: 2, pipSize: 0.1, enabled: true, providerSymbol: "XAU_USD" },
   { symbol: "XAGUSD", name: "Silver", assetClass: "metals", baseDecimals: 3, pipSize: 0.01, enabled: true, providerSymbol: "XAG_USD" },
+
+  { symbol: "USOIL", name: "WTI Crude Oil (Spot)", assetClass: "commodities", baseDecimals: 2, pipSize: 0.01, enabled: true },
+  { symbol: "UKOIL", name: "Brent Crude Oil (Spot)", assetClass: "commodities", baseDecimals: 2, pipSize: 0.01, enabled: true },
+  { symbol: "BCO", name: "Brent Crude Oil Futures", assetClass: "commodities", baseDecimals: 2, pipSize: 0.01, enabled: true },
 
   { symbol: "BTCUSD", name: "Bitcoin", assetClass: "crypto", baseDecimals: 1, pipSize: 1, enabled: true, providerSymbol: "BTCUSDT" },
   { symbol: "ETHUSD", name: "Ethereum", assetClass: "crypto", baseDecimals: 2, pipSize: 0.1, enabled: true, providerSymbol: "ETHUSDT" },
@@ -43,6 +53,9 @@ export const DEFAULT_INSTRUMENTS: Instrument[] = [
 
   { symbol: "US30", name: "US Dow Jones 30", assetClass: "indices", baseDecimals: 1, pipSize: 1, enabled: true },
   { symbol: "US100", name: "Nasdaq 100", assetClass: "indices", baseDecimals: 1, pipSize: 1, enabled: true },
+  { symbol: "NAS100", name: "Nasdaq 100 (United)", assetClass: "indices", baseDecimals: 1, pipSize: 1, enabled: true },
+  { symbol: "UT100", name: "Nasdaq 100 Tech (United)", assetClass: "indices", baseDecimals: 1, pipSize: 1, enabled: true },
+  { symbol: "ET30", name: "Dow Jones 30 (United)", assetClass: "indices", baseDecimals: 1, pipSize: 1, enabled: true },
   { symbol: "US500", name: "S&P 500", assetClass: "indices", baseDecimals: 1, pipSize: 0.1, enabled: true },
   { symbol: "GER40", name: "Germany DAX 40", assetClass: "indices", baseDecimals: 1, pipSize: 1, enabled: true },
   { symbol: "UK100", name: "UK FTSE 100", assetClass: "indices", baseDecimals: 1, pipSize: 1, enabled: true },

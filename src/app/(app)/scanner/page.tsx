@@ -9,7 +9,7 @@ import { StatCard, LiveValue } from "@/components/ui";
 import { motion } from "framer-motion";
 import { Search, Radar, TrendingUp, ShieldCheck, Zap } from "lucide-react";
 
-const FILTERS = ["All", "Forex", "Metals", "Indices", "Futures", "Scalps", "Day Trades", "Long", "Short", "Buy Limits", "Sell Limits", "Low Risk", "Medium Risk", "High Risk"];
+const FILTERS = ["All", "Forex", "Metals", "Indices", "Futures", "Commodities", "Scalps", "Day Trades", "Long", "Short", "Buy Limits", "Sell Limits", "Low Risk", "Medium Risk", "High Risk"];
 
 const container = {
   hidden: { opacity: 0 },
@@ -32,7 +32,7 @@ export default function ScannerPage() {
       const hasSetup = !!r.setup;
       if (!hasSetup && ["Scalps", "Day Trades", "Long", "Short", "Buy Limits", "Sell Limits", "Low Risk", "Medium Risk", "High Risk"].includes(filter)) return false;
       if (filter === "All") return true;
-      if (["Forex", "Metals", "Indices", "Futures"].includes(filter)) return r.assetClass === assetClass;
+      if (["Forex", "Metals", "Indices", "Futures", "Commodities"].includes(filter)) return r.assetClass === assetClass;
       if (filter === "Scalps") return r.setup?.includes("SCALP");
       if (filter === "Day Trades") return r.setup?.includes("DAY TRADE");
       if (filter === "Long") return r.direction === "BUY" && !r.setup?.includes("LIMIT");

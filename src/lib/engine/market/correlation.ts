@@ -51,6 +51,11 @@ const CURRENCIES: Currency[] = ["USD", "EUR", "GBP", "JPY", "CHF", "CAD", "AUD",
 export function parsePair(symbol: string): { base: Currency; quote: Currency } {
   const s = symbol.toUpperCase();
   if (s === "XAUUSD" || s === "GC") return { base: "USD", quote: "USD" };
+  // Non-pair symbols (indices, oils, metals/crypto) have no currency legs; treat
+  // them as neutral so they never feed bogus "currency" exposure into the note.
+  if (["XAGUSD", "USOIL", "UKOIL", "BCO", "NAS100", "UT100", "US100", "ET30", "US30", "US500", "GER40", "UK100", "FRA40", "JP225", "AUS200", "ES", "NQ", "YM", "CL", "NG", "BTCUSD", "ETHUSD", "SOLUSD", "BNBUSD", "XRPUSD"].includes(s)) {
+    return { base: "USD", quote: "USD" };
+  }
   for (let i = 3; i >= 2; i--) {
     if (s.length === 6) {
       const base = s.slice(0, i);

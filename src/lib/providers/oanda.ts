@@ -30,7 +30,12 @@ const OANDA_SYMBOLS: Record<string, string> = {
   USDCAD: "USD_CAD", AUDUSD: "AUD_USD", NZDUSD: "NZD_USD", EURGBP: "EUR_GBP",
   EURJPY: "EUR_JPY", GBPJPY: "GBP_JPY", AUDJPY: "AUD_JPY", EURAUD: "EUR_AUD",
   GBPAUD: "GBP_AUD", AUDCAD: "AUD_CAD", NZDJPY: "NZD_JPY", XAUUSD: "XAU_USD",
-  XAGUSD: "XAG_USD"
+  XAGUSD: "XAG_USD",
+  CADCHF: "CAD_CHF", GBPCHF: "GBP_CHF", NZDCHF: "NZD_CHF", AUDCHF: "AUD_CHF",
+  EURNZD: "EUR_NZD", AUDNZD: "AUD_NZD",
+  NAS100: "NAS100_USD", UT100: "NAS100_USD", US100: "NAS100_USD",
+  ET30: "US30_USD", US30: "US30_USD",
+  USOIL: "WTICO_USD", UKOIL: "BCO_USD", BCO: "BCO_USD"
 };
 
 export interface OandaConfig {
@@ -94,7 +99,7 @@ export class OandaMarketDataProvider implements MarketDataProvider {
 
   async fetchQuotes(): Promise<Quote[]> {
     if (!this.proxyAvailable) return [];
-    const instruments = this.symbols.map((s) => OANDA_SYMBOLS[s.symbol]).join(",");
+    const instruments = [...new Set(this.symbols.map((s) => OANDA_SYMBOLS[s.symbol]))].join(",");
     try {
       const res = await fetch(`${this.proxyBase}?action=pricing&symbols=${encodeURIComponent(instruments)}`, { cache: "no-store" });
       if (!res.ok) return [];

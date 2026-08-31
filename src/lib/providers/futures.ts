@@ -24,6 +24,9 @@ const TIMEFRAME_MS: Record<Timeframe, number> = {
 const BASE_PRICE: Record<string, number> = {
   US30: 39000,
   US100: 20700,
+  NAS100: 20700,
+  UT100: 20700,
+  ET30: 39000,
   US500: 5100,
   GER40: 18700,
   UK100: 8300,
@@ -35,13 +38,19 @@ const BASE_PRICE: Record<string, number> = {
   YM: 39100,
   CL: 82,
   GC: 2350,
-  NG: 2.6
+  NG: 2.6,
+  USOIL: 78,
+  UKOIL: 82,
+  BCO: 82
 };
 
 // Per-tick volatility (as a fraction of price) scaled per asset.
 const VOLATILITY: Record<string, number> = {
   US30: 0.0006,
   US100: 0.0009,
+  NAS100: 0.0009,
+  UT100: 0.0009,
+  ET30: 0.0006,
   US500: 0.0007,
   GER40: 0.0008,
   UK100: 0.0006,
@@ -53,13 +62,17 @@ const VOLATILITY: Record<string, number> = {
   YM: 0.0006,
   CL: 0.012,
   GC: 0.005,
-  NG: 0.02
+  NG: 0.02,
+  USOIL: 0.012,
+  UKOIL: 0.012,
+  BCO: 0.012
 };
 
 const DECIMALS: Record<string, number> = {
   CL: 2, GC: 2, NG: 3,
   US500: 1, GER40: 1, UK100: 1, FRA40: 1, JP225: 1, AUS200: 1,
-  US30: 1, US100: 1, ES: 1, NQ: 1, YM: 0
+  US30: 1, US100: 1, ES: 1, NQ: 1, YM: 0,
+  USOIL: 2, UKOIL: 2, BCO: 2
 };
 
 /**

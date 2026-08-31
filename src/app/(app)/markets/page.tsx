@@ -6,14 +6,15 @@ import { formatPrice } from "@/lib/utils";
 import { TREND_COLOR } from "@/components/ui/badges";
 import { LiveValue } from "@/components/ui";
 import { motion } from "framer-motion";
-import { Globe, ArrowUpRight, Coins, CandlestickChart, Landmark } from "lucide-react";
+import { Globe, ArrowUpRight, Coins, CandlestickChart, Landmark, Fuel } from "lucide-react";
 
-const GROUPS = ["forex", "metals", "indices", "futures"] as const;
+const GROUPS = ["forex", "metals", "indices", "futures", "commodities"] as const;
 const GROUP_LABEL: Record<string, string> = {
   forex: "Forex",
   metals: "Metals",
   indices: "Indices",
   futures: "Futures",
+  commodities: "Commodities",
 };
 
 const GROUP_ICON: Record<string, React.ReactNode> = {
@@ -21,6 +22,7 @@ const GROUP_ICON: Record<string, React.ReactNode> = {
   metals: <Coins className="w-5 h-5" />,
   indices: <CandlestickChart className="w-5 h-5" />,
   futures: <Landmark className="w-5 h-5" />,
+  commodities: <Fuel className="w-5 h-5" />,
 };
 
 const container = {
