@@ -163,6 +163,12 @@ export interface Signal {
   };
   /** Correlation / DXY note (§14/§15) attached to this signal. */
   correlationNote?: string | null;
+  /** Institutional order-block entry details (zone + sweep/FVG evidence). */
+  institutionalEntry?: {
+    side: string;
+    zone: string | null;
+    reasons: string[];
+  };
 }
 
 export type SignalType =

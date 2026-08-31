@@ -24,6 +24,7 @@ import { DEFAULT_STRATEGY_CONFIG } from "./strategy/strategy-config";
 import { clamp } from "../utils";
 import { evaluateSignal } from "./signal-intelligence";
 import { buildMarketIntel } from "./market/market-intel";
+import { InstitutionalEntryEngine } from "./market/institutional-entry";
 
 export interface AnalysisConfig {
   minSignalScore: number;
@@ -169,6 +170,23 @@ export class AnalysisCoordinator {
                 liquidity: mi.liquidityEvent
               };
               signal.correlationNote = mi.correlationNote;
+
+              // ── Institutional entry gate (MARKET / DAY TRADE only) ──
+              // Never chase price. Only allow a market long/short when price is
+              // pulling back to a valid institutional ORDER BLOCK formed by a
+              // liquidity sweep + displacement (+FVG), in the HTF trend direction.
+              // If there's no valid block, we SKIP the signal — that's how we avoid
+              // the entry-then-immediate-SL chases that cause losses.
+              if (!draft.type.includes("LIMIT") && !draft.type.includes("SWING")) {
+                const gated = applyInstitutionalGate(signal, analysis);
+                if (!gated) continue; // no valid order block → do not post
+                signal.entry = gated.entry;
+                signal.entryZone = gated.entryZone;
+                signal.stopLoss = gated.stopLoss;
+                signal.takeProfits = gated.takeProfits;
+                signal.institutionalEntry = gated.notes;
+              }
+
               snapshot.signals.push(signal);
             }
           }
@@ -280,6 +298,66 @@ export class AnalysisCoordinator {
 function riskAllowed(level: string, max: string): boolean {
   const order = ["VERY LOW", "LOW", "MEDIUM", "HIGH", "VERY HIGH"];
   return order.indexOf(level) <= order.indexOf(max);
+}
+
+/**
+ * Institutional order-block entry gate for MARKET / DAY TRADE signals.
+ *
+ * Only lets the signal through when price is pulling back to a valid order block
+ * (liquidity sweep -> displacement -> FVG) in the direction of the HTF trend.
+ * Returns the re-leveled entry (entry/SL/TP from the block) + evidence, or null
+ * to SKIP the signal entirely (no valid block = do not chase = no stop-out chase).
+ */
+function applyInstitutionalGate(
+  signal: Signal,
+  analysis: InstrumentAnalysis
+): { entry: number; entryZone: [number, number]; stopLoss: number; takeProfits: [number, number, number]; notes: { side: string; zone: string | null; reasons: string[] } } | null {
+  const side = signal.direction === "BUY" ? "LONG" : "SHORT";
+
+  // Map the HTF bias string to a strict direction for the gate.
+  const htf = (analysis.trend.higherTimeframe || "").toUpperCase();
+  let htfBias: string;
+  if (htf.includes("BULLISH")) htfBias = "BUY";
+  else if (htf.includes("BEARISH")) htfBias = "SELL";
+  else htfBias = "NEUTRAL";
+
+  // Entry timeframe: 15m gives meaningful blocks for intraday market trades.
+  const series = analysis.series.find((s) => s.timeframe === "15m")
+    ?? analysis.series.find((s) => s.timeframe === "5m")
+    ?? analysis.series[0];
+  const candles = series?.candles;
+  if (!candles || candles.length < 8) return null;
+  const atr = analysis.atr || analysis.price * 0.002;
+
+  const structure = {
+    bos: !!analysis.structure?.bos,
+    choch: !!analysis.structure?.choch,
+    bias: analysis.trend.directionalBias ?? "NEUTRAL"
+  };
+
+  const engine = new InstitutionalEntryEngine().find(side, {
+    candles,
+    htfBias,
+    structure,
+    price: analysis.price,
+    atr,
+    symbol: signal.symbol
+  });
+
+  if (!engine) return null;
+
+  const zoneHalf = Math.max(atr * 0.04, analysis.price * 0.0002);
+  const takeProfits: [number, number, number] = side === "LONG"
+    ? [engine.takeProfit, engine.takeProfit * 1 + (engine.takeProfit - engine.entry) * 0.3, engine.takeProfit * 1 + (engine.takeProfit - engine.entry) * 0.6]
+    : [engine.takeProfit, engine.takeProfit * 1 - (engine.entry - engine.takeProfit) * 0.3, engine.takeProfit * 1 - (engine.entry - engine.takeProfit) * 0.6];
+
+  return {
+    entry: engine.entry,
+    entryZone: [engine.entry - zoneHalf, engine.entry + zoneHalf],
+    stopLoss: engine.stopLoss,
+    takeProfits,
+    notes: { side, zone: `${engine.zone.top.toFixed(4)}-${engine.zone.bottom.toFixed(4)}`, reasons: engine.reasons }
+  };
 }
 
 function riskLevelForScore(analysis: InstrumentAnalysis, direction: "BUY" | "SELL", sessionLiq: number): RiskLevel {

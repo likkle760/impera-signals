@@ -67,6 +67,11 @@ export function formatSignalMessage(sig: Signal, mode: "NEW" | "PAPER" = "NEW"):
   ln.push(`Session    : ${sig.session || "—"}`);
   const align = withTrend(sig);
   ln.push(`Trend      : ${align.marker} ${align.label}`);
+  if (sig.institutionalEntry) {
+    const ie = sig.institutionalEntry;
+    ln.push(`Order block: ib ${ie.side === "LONG" ? "demand" : "supply"} ${ie.zone ?? "—"}`);
+    if (ie.reasons.length) ln.push(`Confluence : ${ie.reasons.join(" · ")}`);
+  }
   if (sig.winRate != null) {
     ln.push(`Hist win   : ${sig.winRate}% (${sig.winRateTrades ?? 0} bt) — est, not a promise`);
   }

@@ -145,6 +145,22 @@ export default function SignalCard({
             <div className="text-[11px] font-bold text-amber-300">{signal.validationNote}</div>
           </div>
         )}
+        {signal.institutionalEntry && (
+          <div className="mt-2 bg-black/30 border border-cyan-500/20 rounded px-2 py-1.5">
+            <div className="flex items-center justify-between">
+              <div className="text-[10px] text-terminal-muted uppercase">Institutional Order Block</div>
+              <span className="text-[10px] font-semibold text-cyan-300">
+                {signal.institutionalEntry.side === "LONG" ? "demand" : "supply"}
+                {signal.institutionalEntry.zone ? ` ${signal.institutionalEntry.zone}` : ""}
+              </span>
+            </div>
+            {signal.institutionalEntry.reasons.length > 0 && (
+              <p className="text-[10px] text-gray-300 leading-snug mt-1">
+                {signal.institutionalEntry.reasons.join(" · ")}
+              </p>
+            )}
+          </div>
+        )}
         {signal.narrative && (
           <div className="mt-2 bg-black/30 border border-emerald-500/20 rounded px-2 py-1.5">
             <div className="flex items-center justify-between">
