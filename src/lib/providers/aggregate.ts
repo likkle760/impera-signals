@@ -24,7 +24,16 @@ export class AggregateMarketDataProvider implements MarketDataProvider {
   }
 
   getSymbols(): Instrument[] {
-    return this.providers.flatMap((p) => p.getSymbols());
+    const seen = new Set<string>();
+    const out: Instrument[] = [];
+    for (const p of this.providers) {
+      for (const i of p.getSymbols()) {
+        if (seen.has(i.symbol)) continue;
+        seen.add(i.symbol);
+        out.push(i);
+      }
+    }
+    return out;
   }
 
   getQuote(symbol: string): Quote | undefined {
@@ -36,7 +45,15 @@ export class AggregateMarketDataProvider implements MarketDataProvider {
   }
 
   getMarketStatus(): MarketStatus {
-    return { open: true, label: "LIVE (OANDA + Binance)", timestamp: Date.now() };
+    const live = this.providers.filter((p) => p.id !== "demo");
+    const hasDemo = this.providers.some((p) => p.id === "demo");
+    if (!live.length) return { open: true, label: "SIMULATED (demo feed)", timestamp: Date.now() };
+    const liveLabel = live.map((p) => p.label).join(" + ");
+    return {
+      open: true,
+      label: hasDemo ? `LIVE (${liveLabel}) + SIM FALLBACK` : `LIVE (${liveLabel})`,
+      timestamp: Date.now()
+    };
   }
 
   getCandleSeries(symbol: string): CandleSeries[] {

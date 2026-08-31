@@ -5,6 +5,7 @@ import { MarketDataProvider } from "@/lib/providers/types";
 import { OandaMarketDataProvider } from "@/lib/providers/oanda";
 import { CryptoMarketDataProvider } from "@/lib/providers/crypto";
 import { FuturesMarketDataProvider } from "@/lib/providers/futures";
+import { DemoMarketDataProvider } from "@/lib/providers/demo";
 import { AggregateMarketDataProvider } from "@/lib/providers/aggregate";
 
 const StoreContext = createContext<MarketStore | null>(null);
@@ -19,6 +20,10 @@ function resolveProvider(): MarketDataProvider | undefined {
   providers.push(new CryptoMarketDataProvider());
   // Indices/futures: simulated feed (clearly labelled) — no free live feed exists.
   providers.push(new FuturesMarketDataProvider());
+  // Demo fallback for forex/metals/commodities: guarantees the app always shows
+  // every instrument even before OANDA is configured. Providers earlier in the
+  // list take precedence, so live OANDA/Binance data overrides this when active.
+  providers.push(new DemoMarketDataProvider());
   if (providers.length === 1) return providers[0];
   return new AggregateMarketDataProvider(providers);
 }

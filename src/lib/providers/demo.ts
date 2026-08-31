@@ -39,10 +39,19 @@ const BASE_PRICES: Record<string, number> = {
   GBPAUD: 1.9512,
   AUDCAD: 0.8935,
   NZDJPY: 88.74,
+  CADCHF: 0.6615,
+  GBPCHF: 1.1312,
+  NZDCHF: 0.5291,
+  AUDCHF: 0.5834,
+  EURNZD: 1.7865,
+  AUDNZD: 1.0955,
   XAUUSD: 2435.2,
   XAGUSD: 29.41,
   US30: 39220,
   US100: 18150,
+  NAS100: 18150,
+  UT100: 18150,
+  ET30: 39220,
   US500: 5120,
   GER40: 18240,
   UK100: 7920,
@@ -54,7 +63,10 @@ const BASE_PRICES: Record<string, number> = {
   YM: 39280,
   CL: 78.42,
   GC: 2438,
-  NG: 2.742
+  NG: 2.742,
+  USOIL: 78.1,
+  UKOIL: 82.3,
+  BCO: 82.3
 };
 
 const VOLATILITY: Record<string, number> = {
@@ -73,10 +85,19 @@ const VOLATILITY: Record<string, number> = {
   GBPAUD: 0.00028,
   AUDCAD: 0.00016,
   NZDJPY: 0.019,
+  CADCHF: 0.00016,
+  GBPCHF: 0.0002,
+  NZDCHF: 0.00015,
+  AUDCHF: 0.00016,
+  EURNZD: 0.0002,
+  AUDNZD: 0.00016,
   XAUUSD: 0.22,
   XAGUSD: 0.045,
   US30: 29,
   US100: 26,
+  NAS100: 26,
+  UT100: 26,
+  ET30: 30,
   US500: 6.5,
   GER40: 30,
   UK100: 22,
@@ -88,7 +109,10 @@ const VOLATILITY: Record<string, number> = {
   YM: 30,
   CL: 0.11,
   GC: 0.23,
-  NG: 0.012
+  NG: 0.012,
+  USOIL: 0.12,
+  UKOIL: 0.12,
+  BCO: 0.12
 };
 
 const SPREAD: Record<string, number> = {
@@ -107,10 +131,19 @@ const SPREAD: Record<string, number> = {
   GBPAUD: 0.0004,
   AUDCAD: 0.00024,
   NZDJPY: 0.024,
+  CADCHF: 0.00024,
+  GBPCHF: 0.0004,
+  NZDCHF: 0.00028,
+  AUDCHF: 0.00026,
+  EURNZD: 0.00034,
+  AUDNZD: 0.0003,
   XAUUSD: 0.12,
   XAGUSD: 0.03,
   US30: 1.2,
   US100: 1.4,
+  NAS100: 1.4,
+  UT100: 1.4,
+  ET30: 1.2,
   US500: 0.6,
   GER40: 1.4,
   UK100: 1.2,
@@ -122,7 +155,10 @@ const SPREAD: Record<string, number> = {
   YM: 2,
   CL: 0.02,
   GC: 0.14,
-  NG: 0.004
+  NG: 0.004,
+  USOIL: 0.03,
+  UKOIL: 0.04,
+  BCO: 0.04
 };
 
 function mulberry32(seed: number): () => number {
