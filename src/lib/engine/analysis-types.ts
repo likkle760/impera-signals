@@ -148,6 +148,8 @@ export interface Signal {
   winRateTrades?: number;
   /** Human-readable live verdict (win-rate + pending news) for the trader. */
   newsVerdict?: string;
+  /** Honest strategy-validation note (e.g. "NOT VALIDATED FOR LIVE USE"). */
+  validationNote?: string;
 }
 
 export type SignalType =

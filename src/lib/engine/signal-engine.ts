@@ -14,6 +14,11 @@ import type {
   SignalType
 } from "./analysis-types";
 import { RiskEngine } from "./risk";
+import { SwingSignalEngine } from "./swing/signal";
+import { SWING_VALIDATION } from "./swing";
+import { ScalpSignalEngine } from "./scalp/signal";
+import { SCALPING_VALIDATION } from "./scalp";
+import type { Candle } from "../types";
 
 export interface SignalEngineConfig {
   minSignalScore: number;
@@ -42,6 +47,8 @@ export interface DraftSignal {
 export class SignalEngine {
   private config: SignalEngineConfig;
   private risk: RiskEngine;
+  private swingEngine = new SwingSignalEngine();
+  private scalpEngine = new ScalpSignalEngine();
 
   constructor(config: Partial<SignalEngineConfig> = {}, risk?: RiskEngine) {
     this.config = { ...DEFAULT_SIGNAL_CONFIG, ...config };
@@ -137,18 +144,30 @@ export class SignalEngine {
     // (HTF + LT + momentum + structure all agreeing = the only case we go to market).
     const clearLead = Math.abs(bullPoints - bearPoints) >= 3;
 
-    if (marketNotConfirmed) {
-      drafts.push({ direction, type: marketType, confluence, noTrade: "SETUP NOT CONFIRMED", reasons: ["Insufficient confluence"] });
-    } else if (!fiveAgrees) {
-      drafts.push({ direction, type: marketType, confluence, noTrade: "CHOPPY MARKET", reasons: ["5M momentum not confirmed"] });
-    } else if (regimeConflicts) {
-      drafts.push({ direction, type: marketType, confluence, noTrade: "CONFLICTING TIMEFRAMES", reasons: ["5M regime conflicts with entry side"] });
-    } else if (!realTrend) {
-      drafts.push({ direction, type: marketType, confluence, noTrade: "CHOPPY MARKET", reasons: ["No confirmed trend (ADX weak)"] });
-    } else if (!clearLead) {
-      drafts.push({ direction, type: marketType, confluence, noTrade: "CHOPPY MARKET", reasons: ["Balanced signals — no clear directional trend"] });
+    // The modular ScalpSignalEngine is authoritative for the immediate scalp
+    // entry whenever 15m/5m/1m series + a live spread are available. It owns the
+    // direction gate (15m context → 5m setup → 1m confirmation), the mandatory
+    // spread/volatility/session/news filters, and a strict NO TRADE default.
+    // Only when it cannot run (no series / no spread) do we fall back to the
+    // legacy confluence market draft.
+    const scalpDraft = this.buildScalpDraft(instrument, analysis);
+
+    if (!scalpDraft) {
+      if (marketNotConfirmed) {
+        drafts.push({ direction, type: marketType, confluence, noTrade: "SETUP NOT CONFIRMED", reasons: ["Insufficient confluence"] });
+      } else if (!fiveAgrees) {
+        drafts.push({ direction, type: marketType, confluence, noTrade: "CHOPPY MARKET", reasons: ["5M momentum not confirmed"] });
+      } else if (regimeConflicts) {
+        drafts.push({ direction, type: marketType, confluence, noTrade: "CONFLICTING TIMEFRAMES", reasons: ["5M regime conflicts with entry side"] });
+      } else if (!realTrend) {
+        drafts.push({ direction, type: marketType, confluence, noTrade: "CHOPPY MARKET", reasons: ["No confirmed trend (ADX weak)"] });
+      } else if (!clearLead) {
+        drafts.push({ direction, type: marketType, confluence, noTrade: "CHOPPY MARKET", reasons: ["Balanced signals — no clear directional trend"] });
+      } else {
+        drafts.push({ direction, type: marketType, confluence, reasons: reasons.slice(0, 4) });
+      }
     } else {
-      drafts.push({ direction, type: marketType, confluence, reasons: reasons.slice(0, 4) });
+      drafts.push(scalpDraft);
     }
 
     // A resting LIMIT entry is evaluated INDEPENDENTLY of the immediate market gate —
@@ -170,83 +189,84 @@ export class SignalEngine {
 
   /**
    * Emits a SWING BUY / SWING SELL draft for longer-held, trend-conformant trades.
-   * Direction is read ONLY from the swing timeframes — 1h, 4h and the 1 DAY candle —
-   * so it rides the real swing rather than intraday noise. The daily (D1) candle
-   * carries the most weight because it defines the dominant swing, then 4h, then 1h.
-   * It requires a genuine one-sided HTF trend (accuracy matters more here because a
-   * swing carries a bigger lot size). Both LONG and SHORT appear, each on its own
-   * confirmed trend; only one side (the aligned one) is emitted per scan.
+   *
+   * This delegates to the modular SwingSignalEngine: the DAILY candle defines the
+   * dominant trend bias, and the 4H candle confirms the entry (pullback + structure
+   * + momentum + volatility + reward:risk). The engine is intentionally SELECTIVE —
+   * it returns NO TRADE when conditions are poor — and it rides the daily swing
+   * rather than intraday noise. Both LONG and SHORT appear, each on its own confirmed
+   * daily trend; only one side (the aligned one) is emitted per scan.
    */
   private buildSwingDraft(instrument: Instrument, analysis: InstrumentAnalysis): DraftSignal | null {
     if (!this.config.enabledModes.swing) return null;
-    // Swing positions are aimed at forex/metal pairs (traded 24h, deep liquidity);
-    // crypto/indices jump too fast to hold across a 1d/4h swing carry.
+    // Swing positions are aimed at forex/metal pairs (traded 24h, deep liquidity).
     if (instrument.assetClass !== "forex" && instrument.assetClass !== "metals") return null;
 
-    const indD = analysis.indicators["1d"];
-    const ind4 = analysis.indicators["4h"];
-    const ind1 = analysis.indicators["1h"];
-    // All three swing candles must exist — otherwise we can't confirm a swing.
-    if (!indD || !ind4 || !ind1) return null;
+    const daily = seriesFor(analysis, "1d");
+    const hour4 = seriesFor(analysis, "4h");
+    if (!daily || !hour4) return null;
 
-    let bull = 0;
-    let bear = 0;
-    const reasons: string[] = [];
+    const sig = this.swingEngine.evaluate({
+      symbol: instrument.symbol,
+      assetClass: instrument.assetClass,
+      daily,
+      hour4,
+      now: analysis.timestamp
+    });
 
-    // --- DAILY (D1) — the dominant swing timeframe, heaviest weight ---
-    const e20d = indD.ema?.["20"];
-    const e50d = indD.ema?.["50"];
-    if (num(e20d) && num(e50d)) {
-      if (analysis.price > e20d && e20d > e50d) { bull += 4; reasons.push("D1 EMA stacked"); }
-      if (analysis.price < e20d && e20d < e50d) { bear += 4; reasons.push("D1 EMA stacked"); }
-    }
-    if (num(indD.macd?.histogram)) {
-      if (indD.macd!.histogram > 0) { bull += 3; reasons.push("D1 MACD +"); }
-      if (indD.macd!.histogram < 0) { bear += 3; reasons.push("D1 MACD −"); }
-    }
+    if (sig.verdict === "NO TRADE") return null;
 
-    // --- 4H — next swing confirmation ---
-    const e20 = ind4.ema?.["20"];
-    const e50 = ind4.ema?.["50"];
-    if (num(e20) && num(e50)) {
-      if (analysis.price > e20 && e20 > e50) { bull += 2; reasons.push("4h EMA stacked"); }
-      if (analysis.price < e20 && e20 < e50) { bear += 2; reasons.push("4h EMA stacked"); }
-    }
-    if (num(ind4.macd?.histogram)) {
-      if (ind4.macd!.histogram > 0) { bull += 2; reasons.push("4h MACD +"); }
-      if (ind4.macd!.histogram < 0) { bear += 2; reasons.push("4h MACD −"); }
-    }
-
-    // --- 1H — nearest confirmation (must not fight the daily) ---
-    if (num(ind1.macd?.histogram)) {
-      if (ind1.macd!.histogram > 0) { bull += 1; reasons.push("1h momentum +"); }
-      if (ind1.macd!.histogram < 0) { bear += 1; reasons.push("1h momentum −"); }
-    }
-
-    // HTF structure break (BOS) agreement with the daily direction.
-    const htf = analysis.trend["higherTimeframe"] ?? analysis.trend.regime;
-    if (analysis.structure.bos) {
-      if (htf.includes("BULLISH")) { bull += 2; reasons.push("BOS bullish"); }
-      if (htf.includes("BEARISH")) { bear += 2; reasons.push("BOS bearish"); }
-    }
-
-    // Real-trend gate on the daily: must be a genuine trend (D1 ADX or a stacked
-    // D1 EMA + open interest-like momentum), not a flat/choppy daily.
-    const adxD = isFinite(indD.adx) ? indD.adx : 0;
-    const realTrend = adxD >= 20 || (num(e20d) && num(e50d) && (analysis.price > e20d || analysis.price < e20d));
-    if (!realTrend) return null;
-
-    // Strict one-sided lead so we never flip direction in a range. A swing needs a
-    // big, clear edge on the daily — raise the bar above the intraday signals.
-    if (Math.abs(bull - bear) < 6) return null;
-
-    const direction: Direction = bull >= bear ? "BUY" : "SELL";
-    const reasonsOut = reasons.slice(0, 4);
+    const direction: Direction = sig.direction === "SELL" ? "SELL" : "BUY";
     return {
       direction,
       type: direction === "BUY" ? "SWING BUY" : "SWING SELL",
-      confluence: Math.max(bull, bear),
-      reasons: reasonsOut
+      confluence: Math.round(sig.score),
+      reasons: sig.reasons.slice(0, 4)
+    };
+  }
+
+  /**
+   * Emits an authoritative SCALP BUY / SCALP SELL draft via the modular
+   * ScalpSignalEngine. Returns null ONLY when the engine cannot run (scalp mode
+   * off, or 15m/5m/1m series or spread missing) — in that case the caller falls
+   * back to the legacy confluence path. When it CAN run, its NO TRADE verdict is
+   * final and returned as a no-trade draft so downstream UI explains rejection.
+   */
+  private buildScalpDraft(instrument: Instrument, analysis: InstrumentAnalysis): DraftSignal | null {
+    if (!this.config.enabledModes.scap) return null;
+
+    const m1 = seriesFor(analysis, "1m");
+    const m5 = seriesFor(analysis, "5m");
+    const m15 = seriesFor(analysis, "15m");
+    if (!m1 || !m5 || !m15) return null;
+    if (!isFinite(analysis.spread) || analysis.spread <= 0) return null;
+
+    const sig = this.scalpEngine.evaluate({
+      symbol: instrument.symbol,
+      assetClass: instrument.assetClass,
+      context: m15,
+      setup: m5,
+      entry: m1,
+      spread: analysis.spread,
+      price: analysis.price,
+      now: analysis.timestamp
+    });
+
+    const direction: Direction = sig.direction === "SELL" ? "SELL" : "BUY";
+    if (sig.verdict === "NO TRADE") {
+      return {
+        direction,
+        type: direction === "BUY" ? "SCALP BUY" : "SCALP SELL",
+        confluence: Math.round(sig.score),
+        reasons: sig.noTradeReason ? [sig.noTradeReason] : sig.reasons.slice(0, 4),
+        noTrade: "SETUP NOT CONFIRMED"
+      };
+    }
+    return {
+      direction,
+      type: direction === "BUY" ? "SCALP BUY" : "SCALP SELL",
+      confluence: Math.round(sig.score),
+      reasons: sig.reasons.slice(0, 4)
     };
   }
 
@@ -466,6 +486,7 @@ export class SignalEngine {
 
     const isLimit = draft.type.includes("LIMIT");
     const isSwing = draft.type.includes("SWING");
+    const isScalp = draft.type.includes("SCALP");
     const resting = isLimit ? this.limitLevel(direction, analysis, atrVal) : null;
     const entry = resting ? resting.price : price;
 
@@ -556,7 +577,12 @@ export class SignalEngine {
       createdAt: timeNow,
       updatedAt: timeNow,
       session: analysis.session,
-      score: 1 / riskToReward
+      score: 1 / riskToReward,
+      validationNote: isSwing && !SWING_VALIDATION.validated
+        ? "NOT VALIDATED FOR LIVE USE"
+        : isScalp && !SCALPING_VALIDATION.validated
+          ? "SCALPING STRATEGY NOT VALIDATED FOR LIVE USE"
+          : undefined
     };
     return signal;
   }
@@ -575,6 +601,15 @@ export class SignalEngine {
 
 function num(v: number | undefined): v is number {
   return typeof v === "number" && isFinite(v);
+}
+
+/** Extract a CandleSeries' candles by timeframe from an analysis. */
+function seriesFor(
+  analysis: InstrumentAnalysis,
+  timeframe: Timeframe
+): Candle[] | null {
+  const s = analysis.series.find((x) => x.timeframe === timeframe);
+  return s && s.candles.length ? s.candles : null;
 }
 
 function emaBull(ind: IndicatorLike, price: number): boolean {

@@ -7,7 +7,9 @@ export const SESSION_DATES: SessionWindow[] = [
   { start: 7, end: 12, session: "LONDON" },
   { start: 12, end: 16, session: "LONDON/NEW YORK OVERLAP" },
   { start: 16, end: 21, session: "NEW YORK" },
-  { start: 21, end: 24, session: "OFF HOURS" }
+  // 21–24 UTC (Sydney open at 21:00, Tokyo at 00:00) is the Asia session too,
+  // not a dead zone — labeling it OFF HOURS misrepresents live Asia liquidity.
+  { start: 21, end: 24, session: "ASIA" }
 ];
 
 export function getCurrentSession(date = new Date()): Session {

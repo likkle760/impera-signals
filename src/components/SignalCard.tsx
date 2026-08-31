@@ -139,6 +139,12 @@ export default function SignalCard({
             <p className="text-[11px] text-amber-200/80 leading-snug">{signal.newsVerdict}</p>
           </div>
         )}
+        {signal.validationNote && (
+          <div className="mt-2 flex items-center justify-between bg-amber-500/10 border border-amber-500/40 rounded px-2 py-1">
+            <div className="text-[10px] text-amber-200/80 uppercase">Validation</div>
+            <div className="text-[11px] font-bold text-amber-300">{signal.validationNote}</div>
+          </div>
+        )}
       </div>
 
       <button
