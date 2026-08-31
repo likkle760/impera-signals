@@ -9,53 +9,35 @@ import type {
 import { ALL_TIMEFRAMES, DEFAULT_INSTRUMENTS } from "../instruments";
 import { MarketDataProvider, MarketDataEventListener } from "./types";
 
+/**
+ * OANDA Live data provider (client-side).
+ *
+ * Client talks ONLY to the local server proxy `/api/market/oanda`. The real
+ * OANDA API token lives server-side and is never exposed to the browser.
+ * This feed is READ-ONLY by deliberate security design (live account).
+ */
+
 const TIMEFRAME_MS: Record<Timeframe, number> = {
-  "1m": 60_000,
-  "3m": 180_000,
-  "5m": 300_000,
-  "15m": 900_000,
-  "30m": 1_800_000,
-  "1h": 3_600_000,
-  "4h": 14_400_000,
-  "1d": 86_400_000
+  "1m": 60_000, "3m": 180_000, "5m": 300_000, "15m": 900_000,
+  "30m": 1_800_000, "1h": 3_600_000, "4h": 14_400_000, "1d": 86_400_000
 };
 
-const OANDA_GRANULARITY: Record<Timeframe, string> = {
-  "1m": "M1",
-  "3m": "M3",
-  "5m": "M5",
-  "15m": "M15",
-  "30m": "M30",
-  "1h": "H1",
-  "4h": "H4",
-  "1d": "D"
-};
+const PROXY = "/api/market/oanda";
 
-// OANDA uses underscores in instrument names and only provides forex/metals/CFDs.
+// Only instruments we can map to OANDA.
 const OANDA_SYMBOLS: Record<string, string> = {
-  EURUSD: "EUR_USD",
-  GBPUSD: "GBP_USD",
-  USDJPY: "USD_JPY",
-  USDCHF: "USD_CHF",
-  USDCAD: "USD_CAD",
-  AUDUSD: "AUD_USD",
-  NZDUSD: "NZD_USD",
-  EURGBP: "EUR_GBP",
-  EURJPY: "EUR_JPY",
-  GBPJPY: "GBP_JPY",
-  AUDJPY: "AUD_JPY",
-  EURAUD: "EUR_AUD",
-  GBPAUD: "GBP_AUD",
-  AUDCAD: "AUD_CAD",
-  NZDJPY: "NZD_JPY",
-  XAUUSD: "XAU_USD",
+  EURUSD: "EUR_USD", GBPUSD: "GBP_USD", USDJPY: "USD_JPY", USDCHF: "USD_CHF",
+  USDCAD: "USD_CAD", AUDUSD: "AUD_USD", NZDUSD: "NZD_USD", EURGBP: "EUR_GBP",
+  EURJPY: "EUR_JPY", GBPJPY: "GBP_JPY", AUDJPY: "AUD_JPY", EURAUD: "EUR_AUD",
+  GBPAUD: "GBP_AUD", AUDCAD: "AUD_CAD", NZDJPY: "NZD_JPY", XAUUSD: "XAU_USD",
   XAGUSD: "XAG_USD"
 };
 
 export interface OandaConfig {
-  token: string;
-  accountId: string;
-  environment?: "practice" | "live";
+  /** optional override; default uses the server proxy's configured account */
+  enabled?: boolean;
+  /** internal: override the proxy base (used only by tests, not the browser page) */
+  baseUrl?: string;
 }
 
 export class OandaMarketDataProvider implements MarketDataProvider {
@@ -63,25 +45,18 @@ export class OandaMarketDataProvider implements MarketDataProvider {
   readonly label = "OANDA Live";
   readonly isLive = true;
 
-  private config: OandaConfig;
-  private restBase: string;
-  private streamBase: string;
   private symbols: Instrument[];
   private quotes = new Map<string, Quote>();
   private candles = new Map<string, Candle[]>();
   private listenerSets = new Set<MarketDataEventListener>();
   private timers: NodeJS.Timeout[] = [];
-  private controller: AbortController | null = null;
   private running = false;
+  private proxyAvailable: boolean | null = null;
+  private proxyBase: string;
 
-  constructor(config: OandaConfig) {
-    this.config = config;
-    const env = config.environment ?? "practice";
-    this.restBase = env === "practice" ? "https://api-fxpractice.oanda.com" : "https://api-fxtrade.oanda.com";
-    this.streamBase = env === "practice" ? "https://stream-fxpractice.oanda.com" : "https://stream-fxtrade.oanda.com";
-    // Only instruments we can map to OANDA
-    this.symbols = DEFAULT_INSTRUMENTS
-      .filter((i) => i.enabled && OANDA_SYMBOLS[i.symbol]);
+  constructor(config: OandaConfig = {}) {
+    this.proxyBase = config.baseUrl ?? PROXY;
+    this.symbols = DEFAULT_INSTRUMENTS.filter((i) => i.enabled && OANDA_SYMBOLS[i.symbol]);
   }
 
   getSymbols(): Instrument[] {
@@ -105,53 +80,35 @@ export class OandaMarketDataProvider implements MarketDataProvider {
     return out;
   }
 
-  private authHeaders(additional: Record<string, string> = {}): Headers {
-    const h = new Headers({
-      "Authorization": `Bearer ${this.config.token}`,
-      "Content-Type": "application/json",
-      ...additional
-    });
-    return h;
+  async checkAvailability(): Promise<boolean> {
+    if (this.proxyAvailable !== null) return this.proxyAvailable;
+    try {
+      const res = await fetch(`${this.proxyBase}?action=status`, { cache: "no-store" });
+      const data = await res.json();
+      this.proxyAvailable = Boolean(data.configured);
+    } catch {
+      this.proxyAvailable = false;
+    }
+    return this.proxyAvailable;
   }
 
   async fetchQuotes(): Promise<Quote[]> {
+    if (!this.proxyAvailable) return [];
     const instruments = this.symbols.map((s) => OANDA_SYMBOLS[s.symbol]).join(",");
-    const url = `${this.restBase}/v3/accounts/${this.config.accountId}/pricing?instruments=${instruments}`;
     try {
-      const res = await fetch(url, { headers: this.authHeaders() });
-      if (!res.ok) throw new Error(`OANDA pricing HTTP ${res.status}`);
+      const res = await fetch(`${this.proxyBase}?action=pricing&symbols=${encodeURIComponent(instruments)}`, { cache: "no-store" });
+      if (!res.ok) return [];
       const data = await res.json();
       const quotes: Quote[] = [];
-      for (const p of data.prices ?? []) {
-        const internal = this.internalSymbol(p.instrument);
-        if (!internal) continue;
-        const item = this.symbols.find((s) => s.symbol === internal);
-        const bid = parseFloat(p.bids?.[0]?.price ?? "0");
-        const ask = parseFloat(p.asks?.[0]?.price ?? "0");
-        const last = (bid + ask) / 2;
-        const quote: Quote = {
-          symbol: internal,
-          bid,
-          ask,
-          last,
-          spread: ask - bid,
-          timestamp: Date.now()
-        };
-        this.quotes.set(internal, quote);
+      for (const q of data.quotes ?? []) {
+        const quote: Quote = { ...q };
+        this.quotes.set(quote.symbol, quote);
         quotes.push(quote);
       }
       return quotes;
-    } catch (e) {
-      for (const l of this.listenerSets) l.onError?.(e instanceof Error ? e : new Error(String(e)));
+    } catch {
       return [];
     }
-  }
-
-  private internalSymbol(oandaSymbol: string): string | null {
-    for (const [k, v] of Object.entries(OANDA_SYMBOLS)) {
-      if (v === oandaSymbol) return k;
-    }
-    return null;
   }
 
   async getHistoricalCandles(
@@ -159,25 +116,16 @@ export class OandaMarketDataProvider implements MarketDataProvider {
     timeframe: Timeframe,
     limit: number
   ): Promise<Candle[]> {
-    const oandaSym = OANDA_SYMBOLS[symbol];
-    if (!oandaSym) return [];
-    const granularity = OANDA_GRANULARITY[timeframe];
-    const url = `${this.restBase}/v3/instruments/${oandaSym}/candles?granularity=${granularity}&count=${limit}&price=MBA`;
+    if (!this.proxyAvailable) return [];
     try {
-      const res = await fetch(url, { headers: this.authHeaders() });
+      const res = await fetch(
+        `${this.proxyBase}?action=candles&symbol=${encodeURIComponent(symbol)}&timeframe=${timeframe}&count=${limit}`,
+        { cache: "no-store" }
+      );
       if (!res.ok) return [];
       const data = await res.json();
-      const candles = (data.candles ?? []).map((c: any) => ({
-        time: new Date(c.time).getTime() / 1000,
-        open: parseFloat(c.mid?.o ?? "0"),
-        high: parseFloat(c.mid?.h ?? "0"),
-        low: parseFloat(c.mid?.l ?? "0"),
-        close: parseFloat(c.mid?.c ?? "0"),
-        volume: c.volume ?? 0
-      }));
-      return candles;
-    } catch (e) {
-      for (const l of this.listenerSets) l.onError?.(e instanceof Error ? e : new Error(String(e)));
+      return data.candles ?? [];
+    } catch {
       return [];
     }
   }
@@ -191,7 +139,14 @@ export class OandaMarketDataProvider implements MarketDataProvider {
     if (this.running) return;
     this.running = true;
 
-    // Fetch candles for each instrument/timeframe in parallel
+    const available = await this.checkAvailability();
+    this.proxyAvailable = available;
+    if (!available) {
+      for (const l of this.listenerSets) l.onError?.(new Error("OANDA proxy not configured (live feed disabled)"));
+      return;
+    }
+
+    // Fetch candles for each instrument/timeframe in parallel.
     const jobs: Promise<void>[] = [];
     for (const sym of this.symbols) {
       for (const tf of ALL_TIMEFRAMES) {
@@ -205,12 +160,12 @@ export class OandaMarketDataProvider implements MarketDataProvider {
     }
     await Promise.all(jobs);
 
-    // Initial quotes
+    // Initial quotes.
     await this.fetchQuotes();
     this.emitQuotes();
     for (const l of this.listenerSets) l.onStatus?.(this.getMarketStatus());
 
-    // Poll quotes every 2s (simple, reliable) — REST pricing endpoint is fastest stable approach
+    // Poll quotes every 2s.
     const poll = setInterval(async () => {
       const quotes = await this.fetchQuotes();
       for (const q of quotes) {
@@ -234,10 +189,7 @@ export class OandaMarketDataProvider implements MarketDataProvider {
       if (last.time < bucketSec) {
         series.push({
           time: bucketSec,
-          open: q.last,
-          high: q.last,
-          low: q.last,
-          close: q.last,
+          open: q.last, high: q.last, low: q.last, close: q.last,
           volume: 0
         });
         if (series.length > 600) series.shift();
@@ -261,6 +213,5 @@ export class OandaMarketDataProvider implements MarketDataProvider {
     this.running = false;
     for (const t of this.timers) clearInterval(t);
     this.timers = [];
-    if (this.controller) this.controller.abort();
   }
 }

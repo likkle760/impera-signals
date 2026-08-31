@@ -153,8 +153,18 @@ export class SignalEngine {
     const scalpDraft = this.buildScalpDraft(instrument, analysis);
 
     if (!scalpDraft) {
+      // TREND ALIGNMENT GATE (market calls only): never fire a market BUY/SELL
+      // against a clear higher-timeframe trend. This is the single biggest source
+      // of losses in discretionary trading — buying into a daily/4H downtrend for
+      // a counter-trend bounce on the 5m, then getting run over. LONG only with a
+      // bullish HTF, SHORT only with a bearish HTF; no clear HTF trend means we
+      // wait for one instead of guessing. The limit entry below is LEFT alone.
+      const htfClear = htfBull !== htfBear;
+      const htfAligned = !htfClear || (direction === "BUY" ? htfBull : htfBear);
       if (marketNotConfirmed) {
         drafts.push({ direction, type: marketType, confluence, noTrade: "SETUP NOT CONFIRMED", reasons: ["Insufficient confluence"] });
+      } else if (!htfAligned) {
+        drafts.push({ direction, type: marketType, confluence, noTrade: "COUNTER-TREND", reasons: [`${htfBear ? "HTF bearish" : "HTF bullish"} — not fading the trend`] });
       } else if (!fiveAgrees) {
         drafts.push({ direction, type: marketType, confluence, noTrade: "CHOPPY MARKET", reasons: ["5M momentum not confirmed"] });
       } else if (regimeConflicts) {

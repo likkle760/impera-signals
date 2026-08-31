@@ -11,17 +11,10 @@ const StoreContext = createContext<MarketStore | null>(null);
 
 function resolveProvider(): MarketDataProvider | undefined {
   const providers: MarketDataProvider[] = [];
-  const token = process.env.NEXT_PUBLIC_OANDA_TOKEN;
-  const accountId = process.env.NEXT_PUBLIC_OANDA_ACCOUNT_ID;
-  if (token && accountId) {
-    providers.push(
-      new OandaMarketDataProvider({
-        token,
-        accountId,
-        environment: process.env.NEXT_PUBLIC_OANDA_ENV === "live" ? "live" : "practice"
-      })
-    );
-  }
+  // OANDA live feed: the API token lives SERVER-SIDE (via the /api/market/oanda
+  // proxy) so it is never exposed to the browser. The proxy reports whether
+  // OANDA is configured; if not, this provider stays idle.
+  providers.push(new OandaMarketDataProvider());
   // Crypto always streams live from the free Binance public API.
   providers.push(new CryptoMarketDataProvider());
   // Indices/futures: simulated feed (clearly labelled) — no free live feed exists.

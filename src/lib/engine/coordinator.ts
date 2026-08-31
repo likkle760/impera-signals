@@ -23,6 +23,7 @@ import { IFVGDetector } from "./strategy/ifvg-detector";
 import { DEFAULT_STRATEGY_CONFIG } from "./strategy/strategy-config";
 import { clamp } from "../utils";
 import { evaluateSignal } from "./signal-intelligence";
+import { buildMarketIntel } from "./market/market-intel";
 
 export interface AnalysisConfig {
   minSignalScore: number;
@@ -156,6 +157,18 @@ export class AnalysisCoordinator {
               signal.winRate = intel.winRate ? Number((intel.winRate.winRate * 100).toFixed(0)) : undefined;
               signal.winRateTrades = intel.winRate?.trades;
               signal.newsVerdict = intel.verdict;
+              const mi = buildMarketIntel(analysis);
+              signal.narrative = {
+                state: mi.narrative.state,
+                action: mi.narrative.action,
+                headline: mi.narrative.headline,
+                story: mi.narrative.story,
+                confirm: mi.narrative.confirm,
+                invalidate: mi.narrative.invalidate ?? null,
+                noTradeReason: mi.narrative.noTradeReason ?? null,
+                liquidity: mi.liquidityEvent
+              };
+              signal.correlationNote = mi.correlationNote;
               snapshot.signals.push(signal);
             }
           }

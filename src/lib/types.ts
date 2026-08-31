@@ -75,7 +75,8 @@ export type NoTradeReason =
   | "LOW LIQUIDITY"
   | "CHOPPY MARKET"
   | "UPCOMING MAJOR EVENT"
-  | "SETUP NOT CONFIRMED";
+  | "SETUP NOT CONFIRMED"
+  | "COUNTER-TREND";
 
 export interface Candle {
   time: number;

@@ -145,6 +145,26 @@ export default function SignalCard({
             <div className="text-[11px] font-bold text-amber-300">{signal.validationNote}</div>
           </div>
         )}
+        {signal.narrative && (
+          <div className="mt-2 bg-black/30 border border-emerald-500/20 rounded px-2 py-1.5">
+            <div className="flex items-center justify-between">
+              <div className="text-[10px] text-terminal-muted uppercase">Narrative</div>
+              <span className="text-[10px] font-semibold text-emerald-300">{signal.narrative.state}</span>
+            </div>
+            <p className="text-[11px] text-gray-200 leading-snug mt-1">{signal.narrative.headline}</p>
+            <p className="text-[10px] text-gray-400 leading-snug mt-0.5">{signal.narrative.story}</p>
+            {signal.narrative.confirm && (
+              <p className="text-[10px] text-emerald-200/80 leading-snug mt-1">
+                <span className="text-terminal-muted">Confirm: </span>{signal.narrative.confirm}
+              </p>
+            )}
+            {signal.narrative.invalidate && (
+              <p className="text-[10px] text-rose-200/80 leading-snug mt-0.5">
+                <span className="text-terminal-muted">Invalidate: </span>{signal.narrative.invalidate}
+              </p>
+            )}
+          </div>
+        )}
       </div>
 
       <button

@@ -19,6 +19,25 @@ function zone([lo, hi]: [number, number]): string {
   return `${round(lo)} - ${round(hi)}`;
 }
 
+// Show whether the direction rides WITH the declared trend (long in an uptrend /
+// short in a downtrend) or against it. Uses the signal's trendLabel; unknown labels
+// yield a neutral "—" rather than a wrong claim.
+function withTrend(sig: Signal): { marker: string; label: string } {
+  const t = (sig.trendLabel || "").toUpperCase();
+  const isLong = sig.direction === "BUY";
+  if (t.includes("BULLISH")) {
+    return isLong
+      ? { marker: "✓ WITH", label: "LONG in an uptrend (with trend)" }
+      : { marker: "✗ AGAINST", label: "SHORT against an uptrend" };
+  }
+  if (t.includes("BEARISH")) {
+    return isLong
+      ? { marker: "✗ AGAINST", label: "LONG against a downtrend" }
+      : { marker: "✓ WITH", label: "SHORT in a downtrend (with trend)" };
+  }
+  return { marker: "—", label: `${t || "neutral"} trend — trade only on the strongest setup` };
+}
+
 export function formatSignalMessage(sig: Signal, mode: "NEW" | "PAPER" = "NEW"): string {
   const ln: string[] = [];
 
@@ -46,6 +65,8 @@ export function formatSignalMessage(sig: Signal, mode: "NEW" | "PAPER" = "NEW"):
   ln.push(`Setup      : ${sig.setupName || "—"}`);
   ln.push(`Bias       : ${sig.trendLabel} (${sig.timeframes.join("/")})`);
   ln.push(`Session    : ${sig.session || "—"}`);
+  const align = withTrend(sig);
+  ln.push(`Trend      : ${align.marker} ${align.label}`);
   if (sig.winRate != null) {
     ln.push(`Hist win   : ${sig.winRate}% (${sig.winRateTrades ?? 0} bt) — est, not a promise`);
   }

@@ -1,13 +1,31 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 import { OandaMarketDataProvider } from "./oanda";
 import { AnalysisCoordinator } from "../engine/coordinator";
+import { GET } from "@/app/api/market/oanda/route";
 
 const TOKEN = process.env.IMPERA_TEST_OANDA_TOKEN || "";
 const ACCOUNT = process.env.IMPERA_TEST_OANDA_ACCOUNT || "";
 
+const originalFetch = global.fetch;
+afterEach(() => {
+  global.fetch = originalFetch;
+});
+
+// Route OANDA proxy requests through the real route handler (in-memory).
+function stubProxy() {
+  global.fetch = (async (input: any, init?: any) => {
+    const url = new URL(String(input));
+    return GET(new Request(url, init));
+  }) as typeof fetch;
+}
+
 describe("OANDA live analysis e2e", () => {
   it.skipIf(!TOKEN || !ACCOUNT)("produces XAUUSD data and limit signals from real live feed", async () => {
-    const provider = new OandaMarketDataProvider({ token: TOKEN, accountId: ACCOUNT });
+    process.env.OANDA_TOKEN = TOKEN;
+    process.env.OANDA_ACCOUNT_ID = ACCOUNT;
+    stubProxy();
+
+    const provider = new OandaMarketDataProvider({ baseUrl: "http://local-test/api/market/oanda" });
     await provider.start();
     const coordinator = new AnalysisCoordinator();
     const snapshot = coordinator.analyze(provider);
@@ -26,16 +44,6 @@ describe("OANDA live analysis e2e", () => {
       const sup = sr.supports.map((s) => `${s.price.toFixed(2)}(d=${near(s.price).toFixed(1)},str=${s.strength})`).join(" ");
       const res = sr.resistances.map((s) => `${s.price.toFixed(2)}(d=${near(s.price).toFixed(1)},str=${s.strength})`).join(" ");
       console.log(`${sym} price=${a.price.toFixed(2)} struct=${struct} SUPPORTS: ${sup} | RES: ${res}`);
-    }
-
-    for (const [sym, a] of Object.entries(snapshot.instruments)) {
-      const idx = a.indicators["15m"] ?? a.indicators["5m"];
-      const atr = a.atr || a.price * 0.002;
-      const sess = a.supportResistance.sessionHighLow;
-      const day = a.supportResistance.dayHighLow;
-      const vwap = idx?.vwap;
-      const d = (p: number) => Math.abs(a.price - p) / atr;
-      console.log(`${sym} price=${a.price.toFixed(2)} atr=${atr.toFixed(3)} sessLow=${sess ? d(sess.low).toFixed(1) : "-"} sessHigh=${sess ? d(sess.high).toFixed(1) : "-"} dayLow=${day ? d(day.low).toFixed(1) : "-"} dayHigh=${day ? d(day.high).toFixed(1) : "-"} vwap=${vwap ? d(vwap).toFixed(1) : "-"} struct=${a.structure.structureType} htf=${a.trend.higherTimeframe}`);
     }
 
     const xauSignals = snapshot.signals.filter((s) => s.symbol === "XAUUSD");

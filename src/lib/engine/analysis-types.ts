@@ -150,6 +150,19 @@ export interface Signal {
   newsVerdict?: string;
   /** Honest strategy-validation note (e.g. "NOT VALIDATED FOR LIVE USE"). */
   validationNote?: string;
+  /** Market-intelligence narrative (§17/§18): story, liquidity, bias, confirm/invalidate. */
+  narrative?: {
+    state: string;
+    action: string;
+    headline: string;
+    story: string;
+    confirm: string;
+    invalidate: string | null;
+    noTradeReason?: string | null;
+    liquidity?: string | null;
+  };
+  /** Correlation / DXY note (§14/§15) attached to this signal. */
+  correlationNote?: string | null;
 }
 
 export type SignalType =
