@@ -51,7 +51,7 @@ export const DEFAULT_ANALYSIS_CONFIG: AnalysisConfig = {
   prioritySymbols: ["XAUUSD"],
   scalpingMode: true,
   dayTradeMode: true,
-  swingMode: false,
+  swingMode: true,
   scanSeconds: 30
 };
 
@@ -91,7 +91,7 @@ export class AnalysisCoordinator {
       maxRiskLevel: config.maxRiskLevel,
       minRiskReward: config.minRiskReward,
       enabledTimeframes: config.enabledTimeframes,
-      enabledModes: { scap: config.scalpingMode, dayTrade: config.dayTradeMode, swing: config.swingMode }
+      enabledModes: { scalp: config.scalpingMode, dayTrade: config.dayTradeMode, swing: config.swingMode }
     });
   }
 

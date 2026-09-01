@@ -25,7 +25,7 @@ export interface SignalEngineConfig {
   maxRiskLevel: RiskLevel;
   minRiskReward: number;
   enabledTimeframes: Timeframe[];
-  enabledModes: { scap: boolean; dayTrade: boolean; swing: boolean };
+  enabledModes: { scalp: boolean; dayTrade: boolean; swing: boolean };
 }
 
 export const DEFAULT_SIGNAL_CONFIG: SignalEngineConfig = {
@@ -33,7 +33,7 @@ export const DEFAULT_SIGNAL_CONFIG: SignalEngineConfig = {
   maxRiskLevel: "HIGH",
   minRiskReward: 1.2,
   enabledTimeframes: ["1m", "3m", "5m", "15m", "30m", "1h", "4h"],
-  enabledModes: { scap: true, dayTrade: true, swing: false }
+  enabledModes: { scalp: true, dayTrade: true, swing: true }
 };
 
 export interface DraftSignal {
@@ -111,7 +111,7 @@ export class SignalEngine {
     if (nearTerm === "BUY") direction = "BUY";
 
     // Determine signal type by timeframe context and structure
-    const scalp = this.config.enabledModes.scap;
+    const scalp = this.config.enabledModes.scalp;
     const structure = analysis.structure.structureType;
     const isPullback = structure === "RANGE" || structure === "PULLBACK" || structure === "RETEST";
 
@@ -243,7 +243,7 @@ export class SignalEngine {
    * final and returned as a no-trade draft so downstream UI explains rejection.
    */
   private buildScalpDraft(instrument: Instrument, analysis: InstrumentAnalysis): DraftSignal | null {
-    if (!this.config.enabledModes.scap) return null;
+    if (!this.config.enabledModes.scalp) return null;
 
     const m1 = seriesFor(analysis, "1m");
     const m5 = seriesFor(analysis, "5m");
