@@ -138,7 +138,11 @@ export class SwingSignalEngine {
 
     // Risk/reward (weight 10) — computed below with a provisional stop.
     // Provisional entry = pullback zone midpoint; stop = beyond zone + ATR buffer.
-    const direction = this.pickDirection(trend, structureBias, momBull, momBear);
+    // Accuracy guard: only take a side when there is a VALIDATED entry zone on the
+    // pullback side (srScore >= 5). Without it the entry would fall back to current
+    // price — i.e. a chase of an extended move, an immediate-SL killer. No zone → NO TRADE.
+    const hasEntryZone = srScore.score >= 5;
+    const direction = this.pickDirection(trend, structureBias, momBull, momBear, hasEntryZone);
     const riskScore = this.riskScore(direction, zones, price, atr4h, cfg);
     factors.push({ label: "Risk/Reward", score: riskScore.score, detail: riskScore.detail });
 
@@ -340,8 +344,12 @@ export class SwingSignalEngine {
     trend: SwingTrendBias,
     struct: SwingStructureBias,
     momBull: boolean,
-    momBear: boolean
+    momBear: boolean,
+    hasEntryZone: boolean
   ): Direction | null {
+    // A tradeable side requires a validated pullback zone on that side — never
+    // enter without a support/resistance level to place the entry and stop on.
+    if (!hasEntryZone) return null;
     if (trend === "BULLISH" && struct !== "BEARISH" && momBull) return "BUY";
     if (trend === "BEARISH" && struct !== "BULLISH" && momBear) return "SELL";
     return null;
