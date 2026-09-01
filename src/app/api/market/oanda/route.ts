@@ -51,6 +51,28 @@ function authHeaders(additional: Record<string, string> = {}): Headers {
   return new Headers({ "Authorization": `Bearer ${process.env.OANDA_TOKEN ?? ""}`, "Content-Type": "application/json", ...additional });
 }
 
+let instrumentsCache: { key: string; at: number; names: Set<string> } | null = null;
+
+async function accountInstruments(base: string, accountId: string): Promise<Set<string>> {
+  const key = `${base}|${accountId}`;
+  if (instrumentsCache && instrumentsCache.key === key && Date.now() - instrumentsCache.at < 5 * 60_000) {
+    return instrumentsCache.names;
+  }
+  try {
+    const res = await fetch(`${base}/v3/accounts/${accountId}/instruments`, {
+      headers: authHeaders(), cache: "no-store"
+    });
+    if (!res.ok) return new Set();
+    const data = await res.json();
+    const names = new Set<string>();
+    for (const i of data.instruments ?? []) names.add(i.name);
+    instrumentsCache = { key, at: Date.now(), names };
+    return names;
+  } catch {
+    return new Set();
+  }
+}
+
 export async function GET(req: Request) {
   const token = process.env.OANDA_TOKEN;
   const accountId = process.env.OANDA_ACCOUNT_ID;
@@ -67,8 +89,8 @@ export async function GET(req: Request) {
       httpStatus: number | null;
       oandaMessage: string | null;
     } = { attempted: configured, ok: false, httpStatus: null, oandaMessage: null };
+    const base = restBase(env);
     if (configured) {
-      const base = restBase(env);
       try {
         const res = await fetch(
           `${base}/v3/accounts/${accountId}/pricing?instruments=EUR_USD,CAD_JPY,XAU_USD`,
@@ -88,13 +110,26 @@ export async function GET(req: Request) {
     const prefix = configured ? String(accountId).split("-")[0] : "??";
     const accountEnvHint =
       prefix === "101" ? "practice" : prefix === "001" ? "live" : prefix ? "unknown" : null;
+
+    const supported = configured ? await accountInstruments(base, accountId!) : new Set<string>();
+    const supportedInternalSet = new Set(
+      [...supported].filter((n) => TO_INTERNAL[n]).map((n) => TO_INTERNAL[n])
+    );
+    const supportedInternal = [...supportedInternalSet].sort();
+    const unsupportedInternal = configured
+      ? Object.values(TO_INTERNAL).filter((n) => !supportedInternalSet.has(n)).sort()
+      : [];
+
     return NextResponse.json({
       configured,
       env,
       label: "OANDA Live",
       accountEnvHint,
       envMismatch: Boolean(accountEnvHint && accountEnvHint !== env),
-      probe
+      probe,
+      supportedCount: supported.size,
+      supportedInternal,
+      unsupportedInternal
     });
   }
 
@@ -117,28 +152,31 @@ export async function GET(req: Request) {
       return { symbol: internal, bid, ask, last: (bid + ask) / 2, spread: ask - bid, timestamp: Date.now() };
     };
 
-    // Happy path: one batched request. OANDA rejects the WHOLE batch with 400 if
-    // even ONE requested instrument is not available on the account, which would
-    // silently drop ALL prices. So on a batch failure we fall back to requesting
-    // each instrument individually and keep the ones that succeed — this way the
-    // app shows REAL OANDA prices for every instrument the account can serve,
-    // and only truly-unsupported symbols fall through to the SIM fallback.
-    for (const instruments of [requested.join(",")]) {
-      try {
-        const res = await fetch(`${base}/v3/accounts/${accountId}/pricing?instruments=${instruments}`, {
-          headers: authHeaders(), cache: "no-store"
-        });
-        if (res.ok) {
-          const data = await res.json();
-          const quotes = (data.prices ?? []).map(toQuote);
-          if (quotes.length) return NextResponse.json({ ok: true, quotes });
-        }
-      } catch { /* fall through to per-symbol */ }
+    // Gate on the instruments THIS account actually supports. OANDA rejects the
+    // WHOLE batch with 400 if even ONE requested instrument is unavailable on the
+    // account, which used to silently drop ALL prices. Requesting only supported
+    // instruments keeps the batch small and fast; anything the account can't serve
+    // simply produces no quote and falls through to the SIM provider.
+    const supported = await accountInstruments(base, accountId);
+    const candidates = supported.size ? requested.filter((r) => supported.has(r)) : requested;
+    if (!candidates.length) {
+      return NextResponse.json({ ok: true, quotes: [], unsupported: requested });
     }
 
-    // Per-symbol fallback: collect quotes for each instrument the account supports.
+    try {
+      const res = await fetch(`${base}/v3/accounts/${accountId}/pricing?instruments=${candidates.join(",")}`, {
+        headers: authHeaders(), cache: "no-store"
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const quotes = (data.prices ?? []).map(toQuote);
+        if (quotes.length) return NextResponse.json({ ok: true, quotes });
+      }
+    } catch { /* fall through to per-symbol */ }
+
+    // Per-symbol fallback: collect quotes for each supported instrument.
     const quotes = [];
-    for (const instrument of requested) {
+    for (const instrument of candidates) {
       try {
         const res = await fetch(`${base}/v3/accounts/${accountId}/pricing?instruments=${instrument}`, {
           headers: authHeaders(), cache: "no-store"
@@ -158,6 +196,10 @@ export async function GET(req: Request) {
     const tf = url.searchParams.get("timeframe") ?? "5m";
     const granularity = TIMEFRAME_GRANULARITY[tf] ?? tf.toUpperCase();
     const count = Math.min(500, parseInt(url.searchParams.get("count") ?? "300", 10));
+    const supported = await accountInstruments(base, accountId);
+    if (supported.size && !supported.has(oanda)) {
+      return NextResponse.json({ ok: false, error: `instrument not available on this account: ${oanda}` }, { status: 404 });
+    }
     try {
       const res = await fetch(`${base}/v3/instruments/${oanda}/candles?granularity=${granularity}&count=${count}&price=MBA`, {
         headers: authHeaders(), cache: "no-store"
