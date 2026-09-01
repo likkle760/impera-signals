@@ -60,7 +60,42 @@ export async function GET(req: Request) {
   const action = url.searchParams.get("action") ?? "status";
 
   if (action === "status") {
-    return NextResponse.json({ configured: Boolean(token && accountId), env, label: "OANDA Live" });
+    const configured = Boolean(token && accountId);
+    const probe: {
+      attempted: boolean;
+      ok: boolean;
+      httpStatus: number | null;
+      oandaMessage: string | null;
+    } = { attempted: configured, ok: false, httpStatus: null, oandaMessage: null };
+    if (configured) {
+      const base = restBase(env);
+      try {
+        const res = await fetch(
+          `${base}/v3/accounts/${accountId}/pricing?instruments=EUR_USD,CAD_JPY,XAU_USD`,
+          { headers: authHeaders(), cache: "no-store" }
+        );
+        probe.httpStatus = res.status;
+        if (res.ok) {
+          const data = await res.json();
+          probe.ok = Array.isArray(data.prices) && data.prices.length > 0;
+        } else {
+          probe.oandaMessage = (await res.text().catch(() => "")).slice(0, 300);
+        }
+      } catch (e) {
+        probe.oandaMessage = String(e);
+      }
+    }
+    const prefix = configured ? String(accountId).split("-")[0] : "??";
+    const accountEnvHint =
+      prefix === "101" ? "practice" : prefix === "001" ? "live" : prefix ? "unknown" : null;
+    return NextResponse.json({
+      configured,
+      env,
+      label: "OANDA Live",
+      accountEnvHint,
+      envMismatch: Boolean(accountEnvHint && accountEnvHint !== env),
+      probe
+    });
   }
 
   if (!token || !accountId) {
