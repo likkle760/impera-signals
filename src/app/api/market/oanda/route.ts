@@ -74,23 +74,47 @@ export async function GET(req: Request) {
       .split(",").map((s) => s.trim()).filter(Boolean)
       .map((s) => TO_OANDA[s] ?? s);
     if (!requested.length) return NextResponse.json({ ok: false, error: "no symbols" }, { status: 400 });
-    const instruments = requested.join(",");
-    try {
-      const res = await fetch(`${base}/v3/accounts/${accountId}/pricing?instruments=${instruments}`, {
-        headers: authHeaders(), cache: "no-store"
-      });
-      if (!res.ok) return NextResponse.json({ ok: false, error: `OANDA HTTP ${res.status}` }, { status: 502 });
-      const data = await res.json();
-      const quotes = (data.prices ?? []).map((p: any) => {
-        const internal = TO_INTERNAL[p.instrument] ?? p.instrument;
-        const bid = parseFloat(p.bids?.[0]?.price ?? "0");
-        const ask = parseFloat(p.asks?.[0]?.price ?? "0");
-        return { symbol: internal, bid, ask, last: (bid + ask) / 2, spread: ask - bid, timestamp: Date.now() };
-      });
-      return NextResponse.json({ ok: true, quotes });
-    } catch (e) {
-      return NextResponse.json({ ok: false, error: String(e) }, { status: 502 });
+
+    const toQuote = (p: any) => {
+      const internal = TO_INTERNAL[p.instrument] ?? p.instrument;
+      const bid = parseFloat(p.bids?.[0]?.price ?? "0");
+      const ask = parseFloat(p.asks?.[0]?.price ?? "0");
+      return { symbol: internal, bid, ask, last: (bid + ask) / 2, spread: ask - bid, timestamp: Date.now() };
+    };
+
+    // Happy path: one batched request. OANDA rejects the WHOLE batch with 400 if
+    // even ONE requested instrument is not available on the account, which would
+    // silently drop ALL prices. So on a batch failure we fall back to requesting
+    // each instrument individually and keep the ones that succeed — this way the
+    // app shows REAL OANDA prices for every instrument the account can serve,
+    // and only truly-unsupported symbols fall through to the SIM fallback.
+    for (const instruments of [requested.join(",")]) {
+      try {
+        const res = await fetch(`${base}/v3/accounts/${accountId}/pricing?instruments=${instruments}`, {
+          headers: authHeaders(), cache: "no-store"
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const quotes = (data.prices ?? []).map(toQuote);
+          if (quotes.length) return NextResponse.json({ ok: true, quotes });
+        }
+      } catch { /* fall through to per-symbol */ }
     }
+
+    // Per-symbol fallback: collect quotes for each instrument the account supports.
+    const quotes = [];
+    for (const instrument of requested) {
+      try {
+        const res = await fetch(`${base}/v3/accounts/${accountId}/pricing?instruments=${instrument}`, {
+          headers: authHeaders(), cache: "no-store"
+        });
+        if (!res.ok) continue;
+        const data = await res.json();
+        const q = (data.prices ?? []).map(toQuote);
+        quotes.push(...q);
+      } catch { /* skip unsupported instrument */ }
+    }
+    return NextResponse.json({ ok: true, quotes });
   }
 
   if (action === "candles") {
