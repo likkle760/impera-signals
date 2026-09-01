@@ -8,6 +8,7 @@ import { RISK_BADGE, TREND_COLOR } from "@/components/ui/badges";
 import { StatCard, LiveValue } from "@/components/ui";
 import { motion } from "framer-motion";
 import { Search, Radar, TrendingUp, ShieldCheck, Zap } from "lucide-react";
+import OandaStatusBanner from "@/components/OandaStatusBanner";
 
 const FILTERS = ["All", "Forex", "Metals", "Indices", "Futures", "Commodities", "Scalps", "Day Trades", "Long", "Short", "Buy Limits", "Sell Limits", "Low Risk", "Medium Risk", "High Risk"];
 
@@ -76,6 +77,11 @@ export default function ScannerPage() {
             <Radar className="w-3.5 h-3.5 text-terminal-accent" /> {rows.length} instruments
           </div>
         </div>
+      </motion.div>
+
+      {/* OANDA feed status */}
+      <motion.div variants={item}>
+        <OandaStatusBanner />
       </motion.div>
 
       {/* Stats */}
