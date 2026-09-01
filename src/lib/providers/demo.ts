@@ -300,6 +300,10 @@ export class DemoMarketDataProvider implements MarketDataProvider {
     return { open: true, label: "MARKET OPEN (DEMO)", timestamp: Date.now() };
   }
 
+  isSimulatedSymbol(): boolean {
+    return true;
+  }
+
   private initQuote(sym: Instrument) {
     const base = BASE_PRICES[sym.symbol] ?? 1.0;
     const r = this.rng[sym.symbol];

@@ -42,4 +42,21 @@ describe("AnalysisCoordinator + DemoMarketDataProvider integration", () => {
       expect(analysis.indicators["5m"]).toBeDefined();
     }
   });
+
+  it("tags demo-fed instruments as SIM and blocks them from producing signals", async () => {
+    const provider = new DemoMarketDataProvider();
+    await provider.start();
+    const coordinator = new AnalysisCoordinator();
+    const snapshot = coordinator.analyze(provider);
+    provider.stop();
+
+    expect(snapshot.instruments["CADJPY"]).toBeDefined();
+    expect(snapshot.instruments["CADJPY"].simulated).toBe(true);
+    expect(snapshot.signals.length).toBe(0);
+    expect(snapshot.scanner.length).toBeGreaterThan(0);
+    for (const row of snapshot.scanner) {
+      expect(row.simulated).toBe(true);
+      expect(row.setup).toBeNull();
+    }
+  });
 });

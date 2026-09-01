@@ -22,6 +22,14 @@ export interface MarketDataProvider {
   getCandleSeries(symbol: string): CandleSeries[];
   getMarketStatus(): MarketStatus;
 
+  /**
+   * Whether a given symbol's current quote/candles come from a SIMULATED
+   * (synthetic / demo) source rather than a live feed. Used to tag sim-fed
+   * instruments as [SIM] and to block them from producing tradable signals.
+   * Defaults to `!isLive` when not implemented.
+   */
+  isSimulatedSymbol?(symbol: string): boolean;
+
   subscribe(listener: MarketDataEventListener): () => void;
   start(): Promise<void>;
   stop(): void;

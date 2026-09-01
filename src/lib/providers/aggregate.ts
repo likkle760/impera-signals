@@ -44,6 +44,14 @@ export class AggregateMarketDataProvider implements MarketDataProvider {
     return undefined;
   }
 
+  isSimulatedSymbol(symbol: string): boolean {
+    // A live provider actually serving a quote for this symbol → real data.
+    const liveServing = this.providers.some((p) => p.isLive && p.getQuote(symbol));
+    // A non-live (sim) provider serving it → synthetic.
+    const simServing = this.providers.some((p) => !p.isLive && p.getQuote(symbol));
+    return simServing && !liveServing;
+  }
+
   getMarketStatus(): MarketStatus {
     const live = this.providers.filter((p) => p.id !== "demo");
     const hasDemo = this.providers.some((p) => p.id === "demo");

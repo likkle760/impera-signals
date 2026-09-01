@@ -118,7 +118,35 @@ export class AnalysisCoordinator {
     for (const instrument of instruments) {
       const analysis = this.analyzeInstrument(provider, instrument);
       if (!analysis) continue;
+      // Mark instruments whose data comes from a simulated/demo feed so the UI
+      // can tag them [SIM] and so they never produce a tradable signal.
+      analysis.simulated = provider.isSimulatedSymbol?.(instrument.symbol) ?? !provider.isLive;
       snapshot.instruments[instrument.symbol] = analysis;
+
+      // Simulated-only instruments must NOT generate buy/sell/limit/swing
+      // signals or futures — their prices are synthetic, not real.
+      if (analysis.simulated) {
+        snapshot.scanner.push({
+          symbol: instrument.symbol,
+          name: instrument.name,
+          assetClass: instrument.assetClass,
+          price: analysis.price,
+          trend: analysis.trend.regime,
+          trendStrength: analysis.trend.strength,
+          setup: null,
+          direction: null,
+          signalScore: null,
+          risk: null,
+          riskScore: null,
+          rr: null,
+          timeframes: [],
+          status: "SIM",
+          updatedAt: analysis.timestamp,
+          noTradeReason: null,
+          simulated: true
+        });
+        continue;
+      }
 
       const drafts = this.signalEngine.detect(instrument, analysis);
       const noTradeDraft = drafts.find((d) => d.noTrade) ?? null;

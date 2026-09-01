@@ -124,6 +124,11 @@ export default function ScannerPage() {
                     <Link href={`/markets/${r.symbol}`} className="text-terminal-text hover:text-terminal-accent transition-colors">
                       {r.symbol}
                     </Link>
+                    {r.simulated && (
+                      <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/40 text-amber-400 text-[10px] font-bold">
+                        SIM
+                      </span>
+                    )}
                   </td>
                   <td>
                     <LiveValue value={r.price} decimals={decimalsFor(r.symbol)} className="font-mono" />

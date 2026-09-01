@@ -117,6 +117,8 @@ export interface InstrumentAnalysis {
   indicators: Record<Timeframe, IndicatorSnapshot>;
   session: string;
   series: CandleSeries[];
+  /** True when this instrument's data comes from a simulated/demo source, not live. */
+  simulated?: boolean;
 }
 
 export interface Signal {
@@ -226,6 +228,8 @@ export interface ScannerRow {
   status: string | null;
   updatedAt: number;
   noTradeReason: NoTradeReason | null;
+  /** True when this instrument's data comes from a simulated/demo source, not live. */
+  simulated?: boolean;
 }
 
 export interface AnalysisSnapshot {
