@@ -5,7 +5,7 @@ import { SESSION_COOKIE } from "./constants";
 export { SESSION_COOKIE };
 
 export async function requireSession(): Promise<PortalSession | { error: string }> {
-  const token = cookies().get(SESSION_COOKIE)?.value;
+  const token = (await cookies()).get(SESSION_COOKIE)?.value;
   const session = await getSession(token);
   if (!session) {
     return { error: "Not authenticated" };

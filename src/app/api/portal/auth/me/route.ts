@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   await ensurePortalInitialized();
-  const token = cookies().get(SESSION_COOKIE)?.value;
+  const token = (await cookies()).get(SESSION_COOKIE)?.value;
   const session = await getSession(token);
   if (!session) {
     return NextResponse.json({ ok: false, authenticated: false }, { status: 401 });
