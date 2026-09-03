@@ -292,6 +292,19 @@ export class SignalEngine {
     const atr = analysis.atr || analysis.price * 0.002;
     const price = analysis.price;
 
+    // TREND ALIGNMENT GATE for resting limits (same rule as the market path):
+    // never rest a BUY LIMIT below a bearish higher-timeframe trend, nor a SELL
+    // LIMIT below a bullish one. A pullback limit is only a good fill if the
+    // eventual direction rides WITH the prevailing trend. A neutral HTF means we
+    // wait rather than guess — this is the fix for the flood of one-sided buy
+    // limits that used to fire without any market confirmation.
+    const htf = (analysis.trend.higherTimeframe || "").toUpperCase();
+    const htfBull = htf.includes("BULLISH");
+    const htfBear = htf.includes("BEARISH");
+    if (direction === "BUY" && htfBear) return null;
+    if (direction === "SELL" && htfBull) return null;
+    if (!htfBull && !htfBear) return null; // no clear HTF trend → no resting level
+
     const level = this.limitLevel(direction, analysis, atr);
     if (!level) return null;
 
@@ -561,6 +574,19 @@ export class SignalEngine {
         : ["5m", "15m", "1h"];
 
     const setupName = this.setupName(direction, analysis);
+
+    // A single clear sentence that spells out DIRECTION + which trend it rides +
+    // the key confirmations, so every card explains itself (e.g. "LONG with the
+    // bullish 5m trend — HTF bullish, momentum up, break of structure").
+    const trendWord = analysis.trend.regime || analysis.trend.higherTimeframe || "neutral trend";
+    const ridingWith =
+      (direction === "BUY" && analysis.trend.higherTimeframe.includes("BULLISH")) ||
+      (direction === "SELL" && analysis.trend.higherTimeframe.includes("BEARISH"));
+    const reasonLead = draft.type.includes("SWING")
+      ? `${direction === "BUY" ? "SWING LONG" : "SWING SHORT"} with the ${trendWord}`
+      : `${direction === "BUY" ? "LONG" : "SHORT"} riding the ${trendWord}${ridingWith ? " (with trend)" : ""}`;
+    const extra = draft.reasons.length ? ` — confirmations: ${draft.reasons.join("; ")}` : "";
+    const reason = `${reasonLead}.${extra}`;
 
     const id = `sig-${instrument.symbol}-${timeNow}-${Math.floor(Math.random() * 10000)}`;
 

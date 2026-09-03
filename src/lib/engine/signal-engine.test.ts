@@ -317,6 +317,24 @@ describe("SignalEngine", () => {
       }
     }
   });
+
+  it("suppresses a BUY LIMIT under a bearish higher-timeframe trend", () => {
+    const engine = new SignalEngine();
+    const analysis = makeAnalysis({
+      trend: { ...makeAnalysis().trend, higherTimeframe: "BEARISH", regime: "BEARISH", directionalBias: "SELL" }
+    });
+    const drafts = engine.detect(instrument, analysis);
+    const buyLimit = drafts.find((d) => d.type === "BUY LIMIT");
+    expect(buyLimit).toBeUndefined();
+  });
+
+  it("suppresses a SELL LIMIT under a bullish higher-timeframe trend", () => {
+    const engine = new SignalEngine();
+    const analysis = makeAnalysis();
+    const drafts = engine.detect(instrument, analysis);
+    const sellLimit = drafts.find((d) => d.type === "SELL LIMIT");
+    expect(sellLimit).toBeUndefined();
+  });
 });
 
 describe("RiskEngine", () => {

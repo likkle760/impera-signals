@@ -294,9 +294,13 @@ export class AnalysisCoordinator {
     noTradeDraft: DraftSignal | null
   ): ScannerRow {
     const active = drafts.filter((d) => d && !d.noTrade);
-    // Prefer showing the limit order (fully analyzed resting entry) in the scanner.
+    // Prefer showing the immediate MARKET / SWING call (the real trend-matched
+    // long/short) in the scanner, and only fall back to a resting LIMIT when no
+    // market or swing setup is active. This stops the UI from drowning in
+    // one-sided limit orders and surfaces the actual directional trade.
+    const market = active.find((d) => !d.type.includes("LIMIT"));
     const limit = active.find((d) => d.type.includes("LIMIT"));
-    const picked = limit ?? active[0] ?? null;
+    const picked = market ?? limit ?? active[0] ?? null;
     const score = picked
       ? this.signalEngine.score(instrument, analysis, picked)
       : null;
