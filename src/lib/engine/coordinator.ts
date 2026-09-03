@@ -294,13 +294,16 @@ export class AnalysisCoordinator {
     noTradeDraft: DraftSignal | null
   ): ScannerRow {
     const active = drafts.filter((d) => d && !d.noTrade);
-    // Prefer showing the immediate MARKET / SWING call (the real trend-matched
-    // long/short) in the scanner, and only fall back to a resting LIMIT when no
-    // market or swing setup is active. This stops the UI from drowning in
-    // one-sided limit orders and surfaces the actual directional trade.
-    const market = active.find((d) => !d.type.includes("LIMIT"));
+    // Prefer surfacing the SWING call in the scanner — swing is the user's main
+    // focus and carries the larger position — so both SWING BUY and SWING SELL
+    // are clearly visible whenever a strict, trend-conformant setup exists. Falls
+    // back to the immediate market call, then a resting limit. This only affects
+    // which signal is SHOWN for the pair; ALL signals (market, limit, swing) are
+    // still emitted into snapshot.signals and posted to Telegram.
+    const swing = active.find((d) => d.type.includes("SWING"));
+    const market = active.find((d) => !d.type.includes("LIMIT") && !d.type.includes("SWING"));
     const limit = active.find((d) => d.type.includes("LIMIT"));
-    const picked = market ?? limit ?? active[0] ?? null;
+    const picked = swing ?? market ?? limit ?? active[0] ?? null;
     const score = picked
       ? this.signalEngine.score(instrument, analysis, picked)
       : null;
