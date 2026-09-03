@@ -50,6 +50,7 @@ export class MarketStore {
   private previousSignals = new Map<string, Signal>();
 
   private telegramSentThisScan = 0;
+  private swingTelegramSentThisScan = 0;
   private telegramLastScanKey = "";
   private lastTelegramSentAt = 0;
 
@@ -143,6 +144,7 @@ export class MarketStore {
     this.setState({ lastScanStart: start });
     this.telegramLastScanKey = `${start}`;
     this.telegramSentThisScan = 0;
+    this.swingTelegramSentThisScan = 0;
     const snapshot = this.coordinator.analyze(this.provider);
 
     const now = Date.now();
@@ -209,16 +211,27 @@ export class MarketStore {
     const settings = loadSettings();
     if (!settings.telegramEnabled) return;
 
+    const isSwing = sig.type.includes("SWING");
+    const isMarket = sig.type.includes("MARKET");
+
     // Prefer actionable market & swing signals over resting limit orders to reduce noise.
-    if (!sig.type.includes("MARKET") && !sig.type.includes("SWING")) return;
+    if (!isMarket && !isSwing) return;
 
     const MIN_INTERVAL_MS = 60_000; // at least one minute between sends
     const maxPerScan = settings.telegramMaxPerScan ?? 1;
-    if (this.telegramSentThisScan >= maxPerScan) return;
-    const now = Date.now();
-    if (now - this.lastTelegramSentAt < MIN_INTERVAL_MS) return;
 
-    this.telegramSentThisScan += 1;
+    // Swing gets its own notification budget so a SWING BUY/SELL is never starved
+    // by a MARKET signal that fired in the same scan. Under strict swing output
+    // this is rare, so each valid swing is guaranteed its own Telegram ping.
+    const swingSlots = Math.max(1, maxPerScan);
+    if (isSwing && this.swingTelegramSentThisScan >= swingSlots) return;
+    if (!isSwing && this.telegramSentThisScan >= maxPerScan) return;
+
+    const now = Date.now();
+    if (now - this.lastTelegramSentAt < MIN_INTERVAL_MS && !isSwing) return;
+
+    if (isSwing) this.swingTelegramSentThisScan += 1;
+    else this.telegramSentThisScan += 1;
     this.lastTelegramSentAt = now;
     sendTelegram(formatSignalMessage(sig)).catch(() => {});
   }
