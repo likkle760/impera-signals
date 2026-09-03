@@ -153,13 +153,24 @@ export default function ScannerPage() {
                     )}
                   </td>
                   <td>
-                    {r.direction ? (
-                      <span className={`font-bold text-sm ${r.direction === "BUY" ? "text-terminal-bull" : "text-terminal-bear"}`}>
-                        {r.direction === "BUY" ? "▲ LONG" : "▼ SHORT"}
-                      </span>
-                    ) : (
-                      <span className="text-terminal-muted">—</span>
-                    )}
+                    {(() => {
+                      const bias = r.trend.includes("BULLISH") ? "BUY" : r.trend.includes("BEARISH") ? "SELL" : null;
+                      if (r.direction) {
+                        return (
+                          <span className={`font-bold text-sm ${r.direction === "BUY" ? "text-terminal-bull" : "text-terminal-bear"}`}>
+                            {r.direction === "BUY" ? "▲ LONG" : "▼ SHORT"}
+                          </span>
+                        );
+                      }
+                      if (bias) {
+                        return (
+                          <span className={`font-medium text-xs opacity-80 ${bias === "BUY" ? "text-terminal-bull" : "text-terminal-bear"}`}>
+                            {bias === "BUY" ? "▲ LONG BIAS" : "▼ SHORT BIAS"}
+                          </span>
+                        );
+                      }
+                      return <span className="text-terminal-muted">—</span>;
+                    })()}
                   </td>
                   <td className={`font-mono font-semibold ${
                     r.signalScore === null ? "text-terminal-muted" : r.signalScore! >= 75 ? "text-terminal-accent" : "text-terminal-text"
