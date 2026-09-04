@@ -38,6 +38,9 @@ export interface SwingConfig {
   momentum: {
     /** RSI above this on a pullback counts as bullish momentum */
     rsiRecovery: number;
+    /** When true (aggressive mode), momentum recovery is NOT required to enter —
+     *  a trend-aligned side with a pullback zone may still qualify. Higher-risk. */
+    relaxMomentum: boolean;
   };
 
   volatility: {
@@ -101,7 +104,8 @@ export const DEFAULT_SWING_CONFIG: SwingConfig = {
     zoneBandAtr: 0.5
   },
   momentum: {
-    rsiRecovery: 50
+    rsiRecovery: 50,
+    relaxMomentum: false
   },
   volatility: {
     atrPctFloor: 0.004,

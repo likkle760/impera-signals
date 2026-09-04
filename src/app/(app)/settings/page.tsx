@@ -67,6 +67,14 @@ export default function SettingsPage() {
         <Toggle label="Scalping Mode" value={s.scalpingMode} onChange={(v) => update({ scalpingMode: v })} />
         <Toggle label="Day Trade Mode" value={s.dayTradeMode} onChange={(v) => update({ dayTradeMode: v })} />
         <Toggle label="Swing Mode" value={s.swingMode} onChange={(v) => update({ swingMode: v })} />
+        <div className="mt-2 border-t border-terminal-border pt-2">
+          <Toggle label="More Signals (High Volume)" value={s.moreSignals} onChange={(v) => update({ moreSignals: v })} />
+          <p className="text-[11px] text-amber-300/80">
+            Higher-frequency MARKET, SWING and LIMIT signals on gold/silver/FX. Relaxes strict
+            filters (trend strength + momentum) but NEVER fades the higher-timeframe trend.
+            Higher risk — choose if you want frequent setups.
+          </p>
+        </div>
       </div>
 
       <div className="panel p-5">

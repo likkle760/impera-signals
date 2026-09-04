@@ -350,8 +350,13 @@ export class SwingSignalEngine {
     // A tradeable side requires a validated pullback zone on that side — never
     // enter without a support/resistance level to place the entry and stop on.
     if (!hasEntryZone) return null;
-    if (trend === "BULLISH" && struct !== "BEARISH" && momBull) return "BUY";
-    if (trend === "BEARISH" && struct !== "BULLISH" && momBear) return "SELL";
+    const relaxMomentum = this.config.momentum.relaxMomentum;
+    if (trend === "BULLISH" && struct !== "BEARISH") {
+      return relaxMomentum || momBull ? "BUY" : null;
+    }
+    if (trend === "BEARISH" && struct !== "BULLISH") {
+      return relaxMomentum || momBear ? "SELL" : null;
+    }
     return null;
   }
 

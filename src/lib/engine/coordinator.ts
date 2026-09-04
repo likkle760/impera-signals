@@ -38,6 +38,11 @@ export interface AnalysisConfig {
   scalpingMode: boolean;
   dayTradeMode: boolean;
   swingMode: boolean;
+  /** OPT-IN aggressive mode: fire more frequent market + swing signals. When on,
+   *  the strict accuracy gates (ADX real-trend, clear-lead, order-block) are
+   *  relaxed so more MARKET BUY/SELL and SWING BUY/SELL appear each scan. Never
+   *  fades the higher-timeframe trend. Default OFF (strict). */
+  moreSignals?: boolean;
   scanSeconds: number;
 }
 
@@ -52,6 +57,7 @@ export const DEFAULT_ANALYSIS_CONFIG: AnalysisConfig = {
   scalpingMode: true,
   dayTradeMode: true,
   swingMode: true,
+  moreSignals: true,
   scanSeconds: 30
 };
 
@@ -91,7 +97,8 @@ export class AnalysisCoordinator {
       maxRiskLevel: config.maxRiskLevel,
       minRiskReward: config.minRiskReward,
       enabledTimeframes: config.enabledTimeframes,
-      enabledModes: { scalp: config.scalpingMode, dayTrade: config.dayTradeMode, swing: config.swingMode }
+      enabledModes: { scalp: config.scalpingMode, dayTrade: config.dayTradeMode, swing: config.swingMode },
+      moreSignals: config.moreSignals
     });
   }
 
@@ -206,13 +213,15 @@ export class AnalysisCoordinator {
               // If there's no valid block, we SKIP the signal — that's how we avoid
               // the entry-then-immediate-SL chases that cause losses.
               if (!draft.type.includes("LIMIT") && !draft.type.includes("SWING")) {
-                const gated = applyInstitutionalGate(signal, analysis);
-                if (!gated) continue; // no valid order block → do not post
-                signal.entry = gated.entry;
-                signal.entryZone = gated.entryZone;
-                signal.stopLoss = gated.stopLoss;
-                signal.takeProfits = gated.takeProfits;
-                signal.institutionalEntry = gated.notes;
+                if (!this.config.moreSignals) {
+                  const gated = applyInstitutionalGate(signal, analysis);
+                  if (!gated) continue;
+                  signal.entry = gated.entry;
+                  signal.entryZone = gated.entryZone;
+                  signal.stopLoss = gated.stopLoss;
+                  signal.takeProfits = gated.takeProfits;
+                  signal.institutionalEntry = gated.notes;
+                }
               }
 
               snapshot.signals.push(signal);

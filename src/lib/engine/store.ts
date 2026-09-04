@@ -65,7 +65,8 @@ export class MarketStore {
       scanSeconds: settings.scanSeconds,
       scalpingMode: settings.scalpingMode,
       dayTradeMode: settings.dayTradeMode,
-      swingMode: settings.swingMode
+      swingMode: settings.swingMode,
+      moreSignals: settings.moreSignals
     };
     this.provider = provider ?? new DemoMarketDataProvider();
     this.coordinator = new AnalysisCoordinator(this.config);

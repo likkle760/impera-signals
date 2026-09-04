@@ -140,7 +140,7 @@ describe("SignalEngine", () => {
   });
 
   it("returns NO TRADE reason when confluence is low", () => {
-    const engine = new SignalEngine();
+    const engine = new SignalEngine({ moreSignals: false });
     const weak = makeAnalysis({
       trend: {
         regime: "NEUTRAL",

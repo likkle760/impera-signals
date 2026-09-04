@@ -12,6 +12,10 @@ export interface UserSettings {
   telegramEnabled: boolean;
   /** Max number of Telegram signals sent per single scan (spam guard). */
   telegramMaxPerScan: number;
+  /** OPT-IN aggressive mode: fire more frequent market + swing signals (relaxes
+   *  accuracy gates). Keeps trend-alignment so it never fades the trend, but is
+   *  higher-risk. Default OFF = strict, high-conviction signals only. */
+  moreSignals: boolean;
   /** Funded-account (prop firm) eval parameters — discipline/pacing targets, not guarantees. */
   propAccountSize: number;
   propMaxLossPct: number;
@@ -24,7 +28,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   minSignalScore: 55,
   maxRiskLevel: "HIGH",
   minRiskReward: 1.1,
-  scanSeconds: 30,
+  scanSeconds: 60,
   scalpingMode: true,
   dayTradeMode: true,
   swingMode: true,
@@ -32,6 +36,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   dataMode: "live",
   telegramEnabled: true,
   telegramMaxPerScan: 1,
+  moreSignals: true,
   propAccountSize: 10000,
   propMaxLossPct: 10,
   propDailyLossPct: 5,

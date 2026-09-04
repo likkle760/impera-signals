@@ -26,6 +26,9 @@ export interface SignalEngineConfig {
   minRiskReward: number;
   enabledTimeframes: Timeframe[];
   enabledModes: { scalp: boolean; dayTrade: boolean; swing: boolean };
+  /** OPT-IN aggressive mode (default false): relax accuracy gates so more
+   *  MARKET and SWING signals fire each scan. Never fades the HTF trend. */
+  moreSignals?: boolean;
 }
 
 export const DEFAULT_SIGNAL_CONFIG: SignalEngineConfig = {
@@ -33,7 +36,8 @@ export const DEFAULT_SIGNAL_CONFIG: SignalEngineConfig = {
   maxRiskLevel: "HIGH",
   minRiskReward: 1.2,
   enabledTimeframes: ["1m", "3m", "5m", "15m", "30m", "1h", "4h"],
-  enabledModes: { scalp: true, dayTrade: true, swing: true }
+  enabledModes: { scalp: true, dayTrade: true, swing: true },
+  moreSignals: true
 };
 
 export interface DraftSignal {
@@ -83,7 +87,8 @@ export class SignalEngine {
     if (momentumUp) { confluence += 2; reasons.push("Momentum positive"); }
     if (momentumDown) { confluence += 2; reasons.push("Momentum negative"); }
 
-    const marketNotConfirmed = confluence < 4;
+    const more = !!this.config.moreSignals;
+    const marketNotConfirmed = more ? confluence < 2 : confluence < 4;
 
     // Decide direction based on confluence-weighted bias
     let bullPoints = 0;
@@ -131,10 +136,10 @@ export class SignalEngine {
     // direction in chop (the classic whipsaw that kills accuracy), so a directional
     // market call only fires when the trend is genuinely one-sided. Since a trend
     // is directional, both LONG and SHORT still appear — each on its own trend.
-    const fiveAgrees = direction === "BUY" ? (nearTerm === "BUY" || momentumUp) : (nearTerm === "SELL" || momentumDown);
-    const regimeConflicts = direction === "BUY"
-      ? trend.shortTerm.includes("BEARISH")
-      : trend.shortTerm.includes("BULLISH");
+      const fiveAgrees = more ? true : (direction === "BUY" ? (nearTerm === "BUY" || momentumUp) : (nearTerm === "SELL" || momentumDown));
+      const regimeConflicts = more ? false : (direction === "BUY"
+        ? trend.shortTerm.includes("BEARISH")
+        : trend.shortTerm.includes("BULLISH"));
     const adx = isFinite(ind5?.adx ?? NaN) ? (ind5?.adx ?? 0) : (indM?.adx ?? 0);
     const realTrend =
       adx >= 20 ||
@@ -161,6 +166,12 @@ export class SignalEngine {
       // wait for one instead of guessing. The limit entry below is LEFT alone.
       const htfClear = htfBull !== htfBear;
       const htfAligned = !htfClear || (direction === "BUY" ? htfBull : htfBear);
+      // OPT-IN aggressive mode: relax the real-trend (ADX) and clear-lead gates so
+      // more MARKET calls fire each scan, but KEEP the HTF alignment guard — we
+      // never fade the higher-timeframe trend. The HTF alignment is the biggest
+      // loss-preventer, so it survives even in "more signals" mode.
+      const realTrendOk = more ? true : realTrend;
+      const clearLeadOk = more ? true : clearLead;
       if (marketNotConfirmed) {
         drafts.push({ direction, type: marketType, confluence, noTrade: "SETUP NOT CONFIRMED", reasons: ["Insufficient confluence"] });
       } else if (!htfAligned) {
@@ -169,9 +180,9 @@ export class SignalEngine {
         drafts.push({ direction, type: marketType, confluence, noTrade: "CHOPPY MARKET", reasons: ["5M momentum not confirmed"] });
       } else if (regimeConflicts) {
         drafts.push({ direction, type: marketType, confluence, noTrade: "CONFLICTING TIMEFRAMES", reasons: ["5M regime conflicts with entry side"] });
-      } else if (!realTrend) {
+      } else if (!realTrendOk) {
         drafts.push({ direction, type: marketType, confluence, noTrade: "CHOPPY MARKET", reasons: ["No confirmed trend (ADX weak)"] });
-      } else if (!clearLead) {
+      } else if (!clearLeadOk) {
         drafts.push({ direction, type: marketType, confluence, noTrade: "CHOPPY MARKET", reasons: ["Balanced signals — no clear directional trend"] });
       } else {
         drafts.push({ direction, type: marketType, confluence, reasons: reasons.slice(0, 4) });
@@ -216,7 +227,22 @@ export class SignalEngine {
     const hour4 = seriesFor(analysis, "4h");
     if (!daily || !hour4) return null;
 
-    const sig = this.swingEngine.evaluate({
+    // In aggressive (moreSignals) mode the swing engine is run with relaxed
+    // filters so far more SWING BUY/SELL fire on the liquid FX pairs. We lower the
+    // score cutoffs and min reward:risk and relax the momentum confirmation, while
+    // KEEPING the daily-trend alignment and the pullback-zone guard (we still never
+    // fade the trend or chase an extended move). This is higher-risk by design —
+    // the user opted into it.
+    const swingEngine = this.config.moreSignals
+      ? new SwingSignalEngine({
+          confidenceThresholds: { strongScore: 62, noTradeScore: 50 },
+          trend: { emaFast: 50, emaSlow: 200, emaTrend: 200, adxMin: 12 },
+          risk: { minRewardRisk: 1.3, stopBufferAtr: 1.2, tp1R: 2, tp2R: 3, defaultRiskPct: 0.5, stopMaxAtr: 6, stopMinAtr: 0.8 },
+          momentum: { rsiRecovery: 42, relaxMomentum: true }
+        })
+      : this.swingEngine;
+
+    const sig = swingEngine.evaluate({
       symbol: instrument.symbol,
       assetClass: instrument.assetClass,
       daily,
@@ -251,7 +277,15 @@ export class SignalEngine {
     if (!m1 || !m5 || !m15) return null;
     if (!isFinite(analysis.spread) || analysis.spread <= 0) return null;
 
-    const sig = this.scalpEngine.evaluate({
+    const scalpEngine = this.config.moreSignals
+      ? new ScalpSignalEngine({
+          scoring: { strongScore: 65, minScore: 45 },
+          spread: { maxSpreadToStop: 0.35 },
+          regime: { atrPctFloor: 0.001, atrPctCeil: 0.02, adxMin: 12 }
+        })
+      : this.scalpEngine;
+
+    const sig = scalpEngine.evaluate({
       symbol: instrument.symbol,
       assetClass: instrument.assetClass,
       context: m15,
@@ -357,7 +391,7 @@ export class SignalEngine {
 
     // A resting level close by + direction that respects the short-term candle is
     // enough to keep the user "ready" with a placeable order.
-    if (confluence < 4) return null;
+    if (confluence < (this.config.moreSignals ? 2 : 4)) return null;
 
     return {
       direction,
@@ -553,9 +587,9 @@ export class SignalEngine {
     // resting limit it flanks the resting level. Previously this was ±0.2 ATR,
     // which produced un-placeably wide bands on high-ATR assets (gold, BTC).
     const zoneHalf = isLimit
-      ? Math.max(atrVal * 0.06, price * 0.0003)
+      ? Math.max(atrVal * 0.03, price * 0.0002)
       : Math.max(atrVal * 0.04, price * 0.0002);
-    const zoneCap = isLimit ? atrVal * 0.12 : atrVal * 0.08;
+    const zoneCap = isLimit ? atrVal * 0.06 : atrVal * 0.08;
     const zone = Math.min(zoneHalf, zoneCap);
     const entryZone: [number, number] = [entry - zone, entry + zone];
 
