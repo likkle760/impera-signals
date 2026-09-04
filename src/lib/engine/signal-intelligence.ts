@@ -127,9 +127,14 @@ export function evaluateSignal(signal: Signal, analysis: InstrumentAnalysis, can
   let wrAdj = 0;
   let verdict: string;
   if (winRate) {
-    // Blend historical win-rate into confidence conservatively.
-    wrAdj = Math.round((winRate.winRate - 0.5) * 12);
-    wrAdj = Math.max(-6, Math.min(6, wrAdj));
+    // Blend historical win-rate into confidence. Confident drawdown — need at
+    // least a handful of trades, but a genuinely strong track record shifts the
+    // final confidence meaningfully (target: only surface signals that have
+    // historically won ~80% of the time).
+    const trades = winRate.trades;
+    const conf = trades >= 40 ? 1.0 : trades >= 20 ? 0.8 : trades >= 10 ? 0.6 : 0.4;
+    const raw = (winRate.winRate - 0.5) * 18;
+    wrAdj = Math.round(Math.max(-12, Math.min(12, raw)) * conf);
     verdict = `Live win-rate ${(winRate.winRate * 100).toFixed(0)}% over ${winRate.trades} backtested ${winRate.symbol} trades.`;
   } else {
     verdict = "Backtest history unavailable for this symbol yet.";

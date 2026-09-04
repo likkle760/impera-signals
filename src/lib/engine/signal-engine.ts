@@ -87,6 +87,18 @@ export class SignalEngine {
     if (momentumUp) { confluence += 2; reasons.push("Momentum positive"); }
     if (momentumDown) { confluence += 2; reasons.push("Momentum negative"); }
 
+    // Multi-timeframe confluence bonus: when 15m + 5m + 1h all agree on direction,
+    // the signal has dramatically higher follow-through probability.
+    const ind5m = analysis.indicators["5m"];
+    const ind15m = analysis.indicators["15m"];
+    const ind1h = analysis.indicators["1h"];
+    const bullCount = [ind5m, ind15m, ind1h].filter((i) => i && emaBull(i, analysis.price)).length;
+    const bearCount = [ind5m, ind15m, ind1h].filter((i) => i && emaBear(i, analysis.price)).length;
+    if (bullCount === 3) { confluence += 3; reasons.push("15m/5m/1h all bullish aligned"); }
+    else if (bearCount === 3) { confluence += 3; reasons.push("15m/5m/1h all bearish aligned"); }
+    else if (bullCount === 2 && htfBull) { confluence += 1; }
+    else if (bearCount === 2 && htfBear) { confluence += 1; }
+
     const more = !!this.config.moreSignals;
     const marketNotConfirmed = more ? confluence < 2 : confluence < 4;
 
@@ -235,10 +247,11 @@ export class SignalEngine {
     // the user opted into it.
     const swingEngine = this.config.moreSignals
       ? new SwingSignalEngine({
-          confidenceThresholds: { strongScore: 62, noTradeScore: 50 },
-          trend: { emaFast: 50, emaSlow: 200, emaTrend: 200, adxMin: 12 },
-          risk: { minRewardRisk: 1.3, stopBufferAtr: 1.2, tp1R: 2, tp2R: 3, defaultRiskPct: 0.5, stopMaxAtr: 6, stopMinAtr: 0.8 },
-          momentum: { rsiRecovery: 42, relaxMomentum: true }
+          confidenceThresholds: { strongScore: 68, noTradeScore: 55 },
+          trend: { emaFast: 50, emaSlow: 200, emaTrend: 200, adxMin: 15 },
+          risk: { minRewardRisk: 1.5, stopBufferAtr: 1.3, tp1R: 2, tp2R: 3, defaultRiskPct: 0.5, stopMaxAtr: 6, stopMinAtr: 0.8 },
+          momentum: { rsiRecovery: 45, relaxMomentum: true },
+          volatility: { atrPctFloor: 0.004, atrPctCeil: 0.1 }
         })
       : this.swingEngine;
 
@@ -279,9 +292,9 @@ export class SignalEngine {
 
     const scalpEngine = this.config.moreSignals
       ? new ScalpSignalEngine({
-          scoring: { strongScore: 65, minScore: 45 },
-          spread: { maxSpreadToStop: 0.35 },
-          regime: { atrPctFloor: 0.001, atrPctCeil: 0.02, adxMin: 12 }
+          scoring: { strongScore: 70, minScore: 55 },
+          spread: { maxSpreadToStop: 0.3 },
+          regime: { atrPctFloor: 0.001, atrPctCeil: 0.02, adxMin: 15 }
         })
       : this.scalpEngine;
 
@@ -493,38 +506,86 @@ export class SignalEngine {
     let score = 0;
     const trend = analysis.trend;
     const ind = analysis.indicators["5m"] ?? analysis.indicators["15m"];
+    const indM = analysis.indicators["15m"] ?? analysis.indicators["30m"];
     const indH = analysis.indicators["1h"] ?? analysis.indicators["4h"];
 
-    score += Math.min(25, trend.strength * 0.25);
-    score += Math.min(15, trend.momentum * 0.15);
-    if (draft.direction === "BUY" && trend.directionalBias === "BUY") score += 10;
-    if (draft.direction === "SELL" && trend.directionalBias === "SELL") score += 10;
-    if (ind && emaBull(ind, analysis.price) && draft.direction === "BUY") score += 8;
-    if (ind && emaBear(ind, analysis.price) && draft.direction === "SELL") score += 8;
+    const dir = draft.direction;
 
-    // Trend-following reward: a signal aligned with BOTH the HTF bias and the
-    // short-term trend (plus rising ADX = a real, tradeable trend) scores higher,
-    // because riding the existing trend is more accurate than fighting it.
-    const htfAligned =
-      (draft.direction === "BUY" && trend.higherTimeframe.includes("BULLISH")) ||
-      (draft.direction === "SELL" && trend.higherTimeframe.includes("BEARISH"));
-    const shortAligned =
-      (draft.direction === "BUY" && (trend.shortTerm.includes("BULLISH") || trend.mediumTerm.includes("BULLISH"))) ||
-      (draft.direction === "SELL" && (trend.shortTerm.includes("BEARISH") || trend.mediumTerm.includes("BEARISH")));
-    if (htfAligned) score += 6;
-    if (shortAligned) score += 6;
-    if (htfAligned && shortAligned) score += 6;
-    if (ind && isFinite(ind.adx) && ind.adx >= 20) score += 4; // real trend strength, not chop
+    // ── 1. MULTI-TIMEFRAME ALIGNMENT (max 25) ──
+    // The single strongest predictor of accuracy: when 15m, 5m, and 1h all agree
+    // on direction, the probability of follow-through increases dramatically.
+    const ind5 = analysis.indicators["5m"];
+    const ind15 = analysis.indicators["15m"];
+    const ind1h = analysis.indicators["1h"];
+    let tfAligned = 0;
+    if (dir === "BUY") {
+      if (ind5 && emaBull(ind5, analysis.price)) tfAligned++;
+      if (ind15 && emaBull(ind15, analysis.price)) tfAligned++;
+      if (ind1h && emaBull(ind1h, analysis.price)) tfAligned++;
+    } else {
+      if (ind5 && emaBear(ind5, analysis.price)) tfAligned++;
+      if (ind15 && emaBear(ind15, analysis.price)) tfAligned++;
+      if (ind1h && emaBear(ind1h, analysis.price)) tfAligned++;
+    }
+    score += [0, 5, 15, 25][tfAligned]; // 0=none, 5=one, 15=two, 25=all three
 
-    if (ind && isFinite(ind.rsi) && draft.direction === "BUY" && ind.rsi > 50 && ind.rsi < 70) score += 5;
-    if (ind && isFinite(ind.rsi) && draft.direction === "SELL" && ind.rsi < 50 && ind.rsi > 30) score += 5;
-    if (indH && indH.macd && draft.direction === "BUY" && indH.macd.histogram > 0) score += 5;
-    if (indH && indH.macd && draft.direction === "SELL" && indH.macd.histogram < 0) score += 5;
-    if (analysis.supportResistance.supports.length && draft.direction === "BUY") score += 4;
-    if (analysis.supportResistance.resistances.length && draft.direction === "SELL") score += 4;
-    if (ind && analysis.structure.bos && draft.direction === "BUY" && ind.vwap !== null && analysis.price > ind.vwap) score += 4;
+    // ── 2. TREND STRENGTH (max 20) ──
+    // ADX >= 30 = real tradeable trend; >= 40 = strong. Regime = TRENDING adds.
+    const adx = isFinite(ind?.adx ?? NaN) ? (ind?.adx ?? 0) : (indM?.adx ?? 0);
+    if (adx >= 40) score += 12;
+    else if (adx >= 30) score += 8;
+    else if (adx >= 20) score += 4;
+    if (trend.strength >= 60) score += 4;
+    else if (trend.strength >= 40) score += 2;
 
-    score += Math.min(10, draft.confluence * 2);
+    // ── 3. ENTRY QUALITY — key level proximity + structure (max 20) ──
+    // Entering near a validated S/R level is one of the best accuracy predictors.
+    const atrVal = analysis.atr || analysis.price * 0.002;
+    const sR = analysis.supportResistance;
+    if (dir === "BUY") {
+      const nearSup = sR.supports.some((s) => Math.abs(s.price - analysis.price) <= atrVal * 1.0);
+      if (nearSup) score += 8;
+      else if (sR.supports.length > 0) score += 3;
+    } else {
+      const nearRes = sR.resistances.some((r) => Math.abs(r.price - analysis.price) <= atrVal * 1.0);
+      if (nearRes) score += 8;
+      else if (sR.resistances.length > 0) score += 3;
+    }
+    if (analysis.structure.bos) score += 4;
+    if (analysis.structure.choch) score += 3;
+    if (dir === "BUY" && analysis.fvg.some((f) => f.type === "bullish" && !f.filled && f.lower <= analysis.price && analysis.price <= f.upper)) score += 5;
+    if (dir === "SELL" && analysis.fvg.some((f) => f.type === "bearish" && !f.filled && f.lower <= analysis.price && analysis.price <= f.upper)) score += 5;
+
+    // ── 4. MOMENTUM CONFIRMATION (max 15) ──
+    // RSI in the right zone + MACD histogram agreeing = momentum backing the entry.
+    if (isFinite(ind?.rsi ?? NaN)) {
+      const rsi = ind!.rsi;
+      if (dir === "BUY" && rsi > 45 && rsi < 75) score += 5;
+      else if (dir === "SELL" && rsi < 55 && rsi > 25) score += 5;
+      // Extreme RSI bonus: buy near oversold, sell near overbought = high-accuracy reversal
+      if (dir === "BUY" && rsi < 35) score += 3;
+      if (dir === "SELL" && rsi > 65) score += 3;
+    }
+    if (indH && indH.macd) {
+      if (dir === "BUY" && indH.macd.histogram > 0) score += 5;
+      else if (dir === "SELL" && indH.macd.histogram < 0) score += 5;
+    }
+
+    // ── 5. SESSION / LIQUIDITY (max 10) ──
+    // London/NY overlap = deepest liquidity = tightest spreads = best fills.
+    const session = analysis.session || "";
+    if (session.includes("OVERLAP")) score += 10;
+    else if (session.includes("LONDON") || session.includes("NEW YORK")) score += 7;
+    else if (session.includes("ASIA")) score += 3;
+
+    // ── 6. VOLATILITY REGIME (max 5) ──
+    // Moderate volatility = real moves with manageable stops.
+    if (trend.volatilityScore >= 30 && trend.volatilityScore <= 60) score += 5;
+    else if (trend.volatilityScore > 0) score += 2;
+
+    // ── 7. HTF DIRECTIONAL BIAS (max 5) ──
+    if (dir === "BUY" && trend.directionalBias === "BUY") score += 5;
+    else if (dir === "SELL" && trend.directionalBias === "SELL") score += 5;
 
     return Math.round(clamp(score, 0, 100));
   }
@@ -685,12 +746,12 @@ function seriesFor(
 function emaBull(ind: IndicatorLike, price: number): boolean {
   const e20 = ind?.ema?.["20"];
   const e50 = ind?.ema?.["50"];
-  return num(e20) && num(e50) && price > e20 && e20 > e50;
+  return num(e20) && num(e50) && price >= e20 && e20 >= e50;
 }
 function emaBear(ind: IndicatorLike, price: number): boolean {
   const e20 = ind?.ema?.["20"];
   const e50 = ind?.ema?.["50"];
-  return num(e20) && num(e50) && price < e20 && e20 < e50;
+  return num(e20) && num(e50) && price <= e20 && e20 <= e50;
 }
 function maBull(ind: IndicatorLike, price: number): boolean {
   const e50 = ind?.ema?.["50"];

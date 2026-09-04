@@ -25,7 +25,7 @@ export interface UserSettings {
 }
 
 export const DEFAULT_SETTINGS: UserSettings = {
-  minSignalScore: 55,
+  minSignalScore: 62,
   maxRiskLevel: "HIGH",
   minRiskReward: 1.1,
   scanSeconds: 60,

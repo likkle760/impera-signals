@@ -5,8 +5,7 @@ import type { InstrumentAnalysis } from "./analysis-types";
 import type { Instrument } from "../types";
 
 function makeAnalysis(overrides: Partial<InstrumentAnalysis> = {}): InstrumentAnalysis {
-  const indCur = () => ({
-    ema: { "9": 101, "20": 100, "50": 99, "100": 98, "200": 97 },
+  const indCur = () => ({    ema: { "9": 101, "20": 100, "50": 99, "100": 98, "200": 97 },
     rsi: 60,
     macd: { macd: 1, signal: 0.5, histogram: 0.5 },
     atr: 0.3,
@@ -75,6 +74,31 @@ function makeAnalysis(overrides: Partial<InstrumentAnalysis> = {}): InstrumentAn
     }
   };
   return { ...base, ...overrides };
+}
+
+function neutralIndicators() {
+  const flat = () => ({
+    ema: { "9": 101, "20": 102, "50": 103, "100": 104, "200": 105 },
+    rsi: 50,
+    macd: { macd: 0, signal: 0, histogram: 0 },
+    atr: 0.3,
+    adx: 10,
+    plusDI: 20,
+    minusDI: 20,
+    vwap: 100,
+    bollinger: { upper: 105, middle: 100, lower: 95 },
+    stochastic: 50
+  });
+  return {
+    "1m": flat(),
+    "3m": flat(),
+    "5m": flat(),
+    "15m": flat(),
+    "30m": flat(),
+    "1h": flat(),
+    "4h": flat(),
+    "1d": flat()
+  } as InstrumentAnalysis["indicators"];
 }
 
 const instrument: Instrument = {
@@ -162,7 +186,8 @@ describe("SignalEngine", () => {
         bos: false,
         choch: false,
         consolidation: true
-      }
+      },
+      indicators: neutralIndicators()
     });
     const drafts = engine.detect(instrument, weak);
     expect(drafts[0]?.noTrade).toBe("SETUP NOT CONFIRMED");
@@ -175,12 +200,19 @@ describe("SignalEngine", () => {
     expect(highScore).toBeGreaterThanOrEqual(50);
 
     const weak = makeAnalysis({
-      trend: { ...makeAnalysis().trend, strength: 30, momentum: 20 }
+      trend: { ...makeAnalysis().trend, strength: 30, momentum: 20 },
+      indicators: neutralIndicators()
     });
     const weakDraft = engine.detect(instrument, weak)[0];
-    const lowScore = engine.score(instrument, makeAnalysis({ trend: makeAnalysis().trend }), weakDraft);
+    const lowScore = engine.score(instrument, weak, weakDraft);
     expect(lowScore).toBeGreaterThanOrEqual(0);
     expect(lowScore).toBeLessThanOrEqual(100);
+
+    // Accuracy contract: a well-aligned multi-timeframe signal must score clearly
+    // above a weak one — this separation is what lets the coordinator filter to
+    // only high-conviction setups.
+    expect(highScore).toBeGreaterThan(lowScore + 10);
+    expect(highScore).toBeGreaterThanOrEqual(50);
   });
 
   it("builds a signal with logical SL/TP ordering", () => {

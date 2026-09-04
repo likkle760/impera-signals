@@ -47,7 +47,7 @@ export interface AnalysisConfig {
 }
 
 export const DEFAULT_ANALYSIS_CONFIG: AnalysisConfig = {
-  minSignalScore: 55,
+  minSignalScore: 62,
   minLimitScore: 40,
   maxRiskLevel: "HIGH",
   minRiskReward: 1.1,
