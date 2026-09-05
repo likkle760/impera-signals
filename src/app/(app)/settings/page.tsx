@@ -35,6 +35,17 @@ export default function SettingsPage() {
             className="w-full"
           />
         </Field>
+        <Field label={`Minimum Setup Confidence (${s.minConfidence}%) — aim A+ (90+), bar ${gradeBar(s.minConfidence)}`}>
+          <input
+            type="range" min={60} max={95} value={s.minConfidence}
+            onChange={(e) => update({ minConfidence: +e.target.value })}
+            className="w-full"
+          />
+          <p className="text-xs text-gray-500 mt-1">
+            A trade only fires when the multi-confirmation engine reaches this grade.
+            90+ = A+ · 85+ = A · 80+ = B (default) · below bar = NO TRADE.
+          </p>
+        </Field>
         <Field label="Maximum Risk Level">
           <select
             value={s.maxRiskLevel}
@@ -177,6 +188,14 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       {children}
     </div>
   );
+}
+
+function gradeBar(n: number): string {
+  if (n >= 90) return "A+";
+  if (n >= 85) return "A";
+  if (n >= 80) return "B";
+  if (n >= 70) return "C";
+  return "F";
 }
 
 function Toggle({ label, value, onChange }: { label: string; value: boolean; onChange: (v: boolean) => void }) {

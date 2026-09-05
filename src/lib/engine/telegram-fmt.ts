@@ -60,7 +60,11 @@ export function formatSignalMessage(sig: Signal, mode: "NEW" | "PAPER" = "NEW"):
   ln.push(``);
 
   // Quality / context
-  ln.push(`Confidence : ${sig.confidence}%   R:R ${sig.riskReward}`);
+  const gradeNote = sig.universeConfidence?.grade ? `  [${sig.universeConfidence.grade}]: ${sig.universeConfidence.band}` : "";
+  ln.push(`Confidence : ${sig.confidence}%   R:R ${sig.riskReward}${gradeNote}`);
+  if (sig.universeConfidence?.reasons?.length) {
+    ln.push(`Grade      : ${sig.universeConfidence.grade} · ${sig.universeConfidence.reasons.join(" · ")}`);
+  }
   ln.push(`Risk level : ${sig.riskLevel} (score ${sig.riskScore})`);
   ln.push(`Setup      : ${sig.setupName || "—"}`);
   ln.push(`Bias       : ${sig.trendLabel} (${sig.timeframes.join("/")})`);

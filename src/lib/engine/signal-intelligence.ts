@@ -127,17 +127,17 @@ export function evaluateSignal(signal: Signal, analysis: InstrumentAnalysis, can
   let wrAdj = 0;
   let verdict: string;
   if (winRate) {
-    // Blend historical win-rate into confidence. Confident drawdown — need at
-    // least a handful of trades, but a genuinely strong track record shifts the
-    // final confidence meaningfully (target: only surface signals that have
-    // historically won ~80% of the time).
+    // Blend historical win-rate into confidence, anchored to the 80% accuracy
+    // target (§15). A track record AT ~80% keeps confidence neutral; well above
+    // it pushes toward the A+/A bar; materially below pulls the setup down.
+    // Confident drawdown — don't fully trust tiny samples.
     const trades = winRate.trades;
     const conf = trades >= 40 ? 1.0 : trades >= 20 ? 0.8 : trades >= 10 ? 0.6 : 0.4;
-    const raw = (winRate.winRate - 0.5) * 18;
+    const raw = (winRate.winRate - 0.8) * 25;
     wrAdj = Math.round(Math.max(-12, Math.min(12, raw)) * conf);
-    verdict = `Live win-rate ${(winRate.winRate * 100).toFixed(0)}% over ${winRate.trades} backtested ${winRate.symbol} trades.`;
+    verdict = `Live win-rate ${(winRate.winRate * 100).toFixed(0)}% over ${winRate.trades} backtested ${winRate.symbol} trades (target ~80%).`;
   } else {
-    verdict = "Backtest history unavailable for this symbol yet.";
+    verdict = "Backtest history unavailable for this symbol yet (no win-rate claim until recorded).";
   }
   if (news.hasEvent) {
     verdict += ` ${news.event} (${news.minutesUntil < 1 ? "imminent" : `in ~${news.minutesUntil}m`})${news.precaution ? " — " + news.precaution : ""}.`;

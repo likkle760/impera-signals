@@ -25,6 +25,8 @@ import { clamp } from "../utils";
 import { evaluateSignal } from "./signal-intelligence";
 import { buildMarketIntel } from "./market/market-intel";
 import { InstitutionalEntryEngine } from "./market/institutional-entry";
+import type { FairValueGap } from "./analysis-types";
+import { scoreConfidence, confidenceBand, gradeLabel } from "./confidence";
 
 export interface AnalysisConfig {
   minSignalScore: number;
@@ -43,14 +45,20 @@ export interface AnalysisConfig {
    *  relaxed so more MARKET BUY/SELL and SWING BUY/SELL appear each scan. Never
    *  fades the higher-timeframe trend. Default OFF (strict). */
   moreSignals?: boolean;
+  /** Minimum multi-confirmation confidence (0-100) to allow a trade. Default 80 (B grade). */
+  minConfidence?: number;
   scanSeconds: number;
 }
+
+/** Default minimum multi-confirmation confidence (B grade, 80%). A+/A = 90+/85+. */
+const DEFAULT_MIN_CONFIDENCE = 80;
 
 export const DEFAULT_ANALYSIS_CONFIG: AnalysisConfig = {
   minSignalScore: 62,
   minLimitScore: 40,
   maxRiskLevel: "HIGH",
   minRiskReward: 1.1,
+  minConfidence: DEFAULT_MIN_CONFIDENCE,
   enabledTimeframes: ALL_TIMEFRAMES,
   enabledInstruments: [],
   prioritySymbols: ["XAUUSD"],
@@ -58,7 +66,7 @@ export const DEFAULT_ANALYSIS_CONFIG: AnalysisConfig = {
   dayTradeMode: true,
   swingMode: true,
   moreSignals: true,
-  scanSeconds: 30
+  scanSeconds: 60
 };
 
 const SESSION_LIQUIDITY: Record<string, number> = {
@@ -186,46 +194,79 @@ export class AnalysisCoordinator {
               score,
               riskRes
             );
-            if (signal && riskAllowed(riskRes.riskLevel, this.config.maxRiskLevel)) {
-              const primarySeries = analysis.series.find((s) => s.timeframe === "5m") ?? analysis.series[0];
-              const intel = evaluateSignal(signal, analysis, primarySeries?.candles ?? []);
-              signal.confidence = intel.confidence;
-              signal.winRate = intel.winRate ? Number((intel.winRate.winRate * 100).toFixed(0)) : undefined;
-              signal.winRateTrades = intel.winRate?.trades;
-              signal.newsVerdict = intel.verdict;
-              const mi = buildMarketIntel(analysis);
-              signal.narrative = {
-                state: mi.narrative.state,
-                action: mi.narrative.action,
-                headline: mi.narrative.headline,
-                story: mi.narrative.story,
-                confirm: mi.narrative.confirm,
-                invalidate: mi.narrative.invalidate ?? null,
-                noTradeReason: mi.narrative.noTradeReason ?? null,
-                liquidity: mi.liquidityEvent
-              };
-              signal.correlationNote = mi.correlationNote;
+            if (!signal || !riskAllowed(riskRes.riskLevel, this.config.maxRiskLevel)) continue;
 
-              // ── Institutional entry gate (MARKET / DAY TRADE only) ──
-              // Never chase price. Only allow a market long/short when price is
-              // pulling back to a valid institutional ORDER BLOCK formed by a
-              // liquidity sweep + displacement (+FVG), in the HTF trend direction.
-              // If there's no valid block, we SKIP the signal — that's how we avoid
-              // the entry-then-immediate-SL chases that cause losses.
-              if (!draft.type.includes("LIMIT") && !draft.type.includes("SWING")) {
-                if (!this.config.moreSignals) {
-                  const gated = applyInstitutionalGate(signal, analysis);
-                  if (!gated) continue;
-                  signal.entry = gated.entry;
-                  signal.entryZone = gated.entryZone;
-                  signal.stopLoss = gated.stopLoss;
-                  signal.takeProfits = gated.takeProfits;
-                  signal.institutionalEntry = gated.notes;
-                }
+            const primarySeries = analysis.series.find((s) => s.timeframe === "5m") ?? analysis.series[0];
+            const intel = evaluateSignal(signal, analysis, primarySeries?.candles ?? []);
+            signal.confidence = intel.confidence;
+            signal.winRate = intel.winRate ? Number((intel.winRate.winRate * 100).toFixed(0)) : undefined;
+            signal.winRateTrades = intel.winRate?.trades;
+            signal.newsVerdict = intel.verdict;
+            const mi = buildMarketIntel(analysis);
+            signal.narrative = {
+              state: mi.narrative.state,
+              action: mi.narrative.action,
+              headline: mi.narrative.headline,
+              story: mi.narrative.story,
+              confirm: mi.narrative.confirm,
+              invalidate: mi.narrative.invalidate ?? null,
+              noTradeReason: mi.narrative.noTradeReason ?? null,
+              liquidity: mi.liquidityEvent
+            };
+            signal.correlationNote = mi.correlationNote;
+
+            // ── Institutional entry gate (MARKET / DAY TRADE only) ──
+            // Never chase price. Only allow a market long/short when price is
+            // pulling back to a valid institutional ORDER BLOCK formed by a
+            // liquidity sweep + displacement (+FVG), in the HTF trend direction.
+            // If there's no valid block, we SKIP the signal — that's how we avoid
+            // the entry-then-immediate-SL chases that cause losses.
+            if (!draft.type.includes("LIMIT") && !draft.type.includes("SWING")) {
+              if (!this.config.moreSignals) {
+                const gated = applyInstitutionalGate(signal, analysis);
+                if (!gated) continue;
+                signal.entry = gated.entry;
+                signal.entryZone = gated.entryZone;
+                signal.stopLoss = gated.stopLoss;
+                signal.takeProfits = gated.takeProfits;
+                signal.institutionalEntry = gated.notes;
               }
-
-              snapshot.signals.push(signal);
             }
+
+            // ── FINAL TRADE DECISION ENGINE (§13, STEP 9-10) ──
+            // Compute the multi-confirmation confidence + enforce minimum RR.
+            // Only allow the trade when:
+            //   confidence >= minConfidence  AND  riskReward >= minRiskReward
+            // Otherwise it is marked NO TRADE — better to miss than enter weak.
+            const entrySideFvg = entryFvgFor(analysis, signal.direction);
+            const rr = Math.max(signal.riskReward, 0);
+            const conf = scoreConfidence(
+              signal.direction,
+              analysis,
+              rr,
+              entrySideFvg,
+              { minConfidence: this.config.minConfidence ?? DEFAULT_MIN_CONFIDENCE }
+            );
+
+            // risk/reward gate
+            const minRR = this.config.minRiskReward;
+            const rrPass = rr >= minRR;
+
+            if (!conf.passed || !rrPass) {
+              continue; // NO TRADE — wait for confirmation (§9)
+            }
+
+            signal.confidence = conf.total;
+            signal.universeConfidence = {
+              total: conf.total,
+              grade: gradeLabel(conf.total),
+              reasons: conf.reasons,
+              band: confidenceBand(conf.total),
+              rr: rr,
+              rrPass: true
+            };
+
+            snapshot.signals.push(signal);
           }
         }
       }
@@ -402,6 +443,19 @@ function applyInstitutionalGate(
     takeProfits,
     notes: { side, zone: `${engine.zone.top.toFixed(4)}-${engine.zone.bottom.toFixed(4)}`, reasons: engine.reasons }
   };
+}
+
+/**
+ * Pick the tradeable FVG on the entry side of `direction`: the freshest,
+ * unfilled gap whose type matches the direction (bullish gap for a BUY, bearish
+ * gap for a SELL). Null when there is no current entry-side gap.
+ */
+function entryFvgFor(analysis: InstrumentAnalysis, direction: "BUY" | "SELL"): FairValueGap | null {
+  const want = direction === "BUY" ? "bullish" : "bearish";
+  const candidates = (analysis.fvg ?? [])
+    .filter((g) => g.type === want && !g.filled)
+    .sort((a, b) => a.age - b.age);
+  return candidates[0] ?? null;
 }
 
 function riskLevelForScore(analysis: InstrumentAnalysis, direction: "BUY" | "SELL", sessionLiq: number): RiskLevel {

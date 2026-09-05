@@ -171,6 +171,15 @@ export interface Signal {
     zone: string | null;
     reasons: string[];
   };
+  /** Multi-confirmation confidence engine result (0-100 confluence score + grade). */
+  universeConfidence?: {
+    total: number;
+    grade: string;
+    reasons?: string[];
+    band: string;
+    rr: number;
+    rrPass: boolean;
+  };
 }
 
 export type SignalType =
