@@ -258,23 +258,47 @@ describe("SignalEngine", () => {
     }
   });
 
-  it("keeps SL and TP tight and close together with logical ordering", () => {
+  it("anchors TP ladder to structural/liquidity targets with logical ordering", () => {
     const engine = new SignalEngine();
-    const draft = engine.detect(instrument, makeAnalysis())[0];
+    const anchored = makeAnalysis({
+      supportResistance: {
+        supports: [{ price: 97, kind: "Support", strength: 3 }],
+        resistances: [{ price: 100.9, kind: "Resistance", strength: 3 }],
+        ranges: [],
+        sessionHighLow: { high: 104, low: 96 },
+        dayHighLow: { high: 105, low: 95 },
+        weeklyHighLow: { high: 110, low: 90 },
+        dailyOpen: 99,
+        weeklyOpen: 98
+      },
+      liquidity: {
+        areas: [{ price: 101.4, kind: "Potential Liquidity (Equal Highs)", strength: 2 }],
+        equalHighs: [101.4],
+        equalLows: [],
+        sweeps: []
+      },
+      fvg: []
+    });
     const risk = new RiskEngine().evaluate(
       instrument,
-      makeAnalysis(),
-      { entry: 100, stopLoss: 99.7, takeProfits: [100.5, 100.8, 101.2] as any, direction: "BUY" }
+      anchored,
+      { entry: 100, stopLoss: 99.7, takeProfits: [100.9, 101.4, 102.0] as any, direction: "BUY" }
     );
-    const sig = engine.buildSignal(instrument, makeAnalysis(), draft, 80, risk);
+    const sig = engine.buildSignal(instrument, anchored, { direction: "BUY", type: "MARKET BUY", reasons: ["liquidity"], confluence: 4 }, 80, risk);
     expect(sig).not.toBeNull();
     if (sig) {
+      // TP1 lands on the nearest resistance, TP2 on the liquidity pool ahead.
+      expect(sig.takeProfits[0]).toBeCloseTo(100.9, 1);
+      expect(sig.takeProfits[1]).toBeCloseTo(101.4, 1);
+      // Every entry-side target clears its RR floor and ladders out logically.
       const riskDistance = Math.abs(sig.entry - sig.stopLoss);
-      // TP2 must stay reasonably close to TP1, TP3 close to TP2 (not stretched).
-      const tp1Dist = Math.abs(sig.takeProfits[1] - sig.takeProfits[0]);
-      const tp2Dist = Math.abs(sig.takeProfits[2] - sig.takeProfits[1]);
-      expect(tp1Dist).toBeLessThanOrEqual(riskDistance * 1.0);
-      expect(tp2Dist).toBeLessThanOrEqual(riskDistance * 1.0);
+      expect(sig.riskReward).toBeGreaterThanOrEqual(1.2);
+      expect(sig.takeProfits[2]).toBeGreaterThan(sig.takeProfits[1]);
+      expect(sig.takeProfits[1]).toBeGreaterThan(sig.takeProfits[0]);
+      const floor2 = sig.entry + riskDistance * 1.6;
+      const floor3 = sig.entry + riskDistance * 2.2;
+      expect(sig.takeProfits[1]).toBeGreaterThanOrEqual(floor2 - 1e-6);
+      expect(sig.takeProfits[2]).toBeGreaterThanOrEqual(floor3 - 1e-6);
     }
   });
 

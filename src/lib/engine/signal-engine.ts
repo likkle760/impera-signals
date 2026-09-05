@@ -633,12 +633,23 @@ export class SignalEngine {
       : tightStop;
     const stopLoss = direction === "BUY" ? entry - stopDist : entry + stopDist;
 
-    // Take profits are kept close and laddered (~1R / 1.6R / 2.2R), not stretched.
-    // Swing rides further: deeper ladder out to ~3.5R for the longer hold.
-    const tpLadder = isSwing ? [1.5, 2.4, 3.5] : [1.0, 1.6, 2.2];
-    const tp1 = direction === "BUY" ? entry + stopDist * tpLadder[0] : entry - stopDist * tpLadder[0];
-    const tp2 = direction === "BUY" ? entry + stopDist * tpLadder[1] : entry - stopDist * tpLadder[1];
-    const tp3 = direction === "BUY" ? entry + stopDist * tpLadder[2] : entry - stopDist * tpLadder[2];
+    // Take-profit anchoring — place targets on real liquidity / S-R / FVG
+    // imbalance levels ahead of price, not blind RR multiples. Each TP still
+    // must clear its minimum RR floor (1R / 1.6R / 2.2R; deeper for swing) so
+    // reward stays meaningful, but the preferred fill is the nearest genuine
+    // market target (liquidity pool, level, or unfilled FVG) past that floor.
+    // This is what makes entries accurate instead of "whatever the RR ladder
+    // says" — a TP sitting on a structural draw-on-chart level is far more
+    // likely to get hit than one mid-air.
+    const tpLadder: [number, number, number] = isSwing ? [1.5, 2.4, 3.5] : [1.0, 1.6, 2.2];
+    const [tp1, tp2, tp3] = this.structureTargets(
+      analysis,
+      direction,
+      entry,
+      stopDist,
+      tpLadder,
+      this.config.minRiskReward
+    );
 
     const riskReward = safeRatio(tp1 - entry, entry - stopLoss);
     const riskToReward = 1 / Math.max(riskReward, 0.001);
@@ -725,6 +736,76 @@ export class SignalEngine {
     if (s === "LOWER LOWS") return "Bearish Continuation";
     if (analysis.structure.choch) return direction === "BUY" ? "Bullish Reversal" : "Bearish Reversal";
     return direction === "BUY" ? "Bullish Pullback" : "Bearish Pullback";
+  }
+
+  /**
+   * Place the TP ladder onto genuine market levels instead of blind RR multiples.
+   * Candidate targets, on the correct side of the entry:
+   *   1. liquidity pools (equal / swept highs above a BUY, lows below a SELL),
+   *   2. validated support / resistance levels,
+   *   3. unfilled FVG imbalance zones (IFVG magnets + standard gaps).
+   * Each TP is the nearest such target past its RR floor; if nothing structural
+   * sits there, the RR floor is used so reward never degrades.
+   */
+  private structureTargets(
+    analysis: InstrumentAnalysis,
+    direction: "BUY" | "SELL",
+    entry: number,
+    stopDist: number,
+    ladder: [number, number, number],
+    minRR: number
+  ): [number, number, number] {
+    const above = direction === "BUY";
+    const atrVal = analysis.atr || entry * 0.002;
+    const candidates: number[] = [];
+
+    for (const a of analysis.liquidity?.areas ?? []) {
+      const isHighSide = a.kind.toUpperCase().includes("HIGH");
+      if (above && isHighSide && a.price > entry) candidates.push(a.price);
+      if (!above && !isHighSide && a.price < entry) candidates.push(a.price);
+    }
+    for (const r of analysis.supportResistance?.resistances ?? []) {
+      if (above && r.price > entry) candidates.push(r.price);
+    }
+    for (const s of analysis.supportResistance?.supports ?? []) {
+      if (!above && s.price < entry) candidates.push(s.price);
+    }
+    for (const g of [...(analysis.ifvg ?? []), ...(analysis.fvg ?? [])]) {
+      if (g.filled) continue;
+      if (above && g.type === "bearish") candidates.push(g.lower, g.upper);
+      if (!above && g.type === "bullish") candidates.push(g.lower, g.upper);
+    }
+
+    // De-dupe near-identical levels, then order nearest-first from the entry.
+    const sep = Math.max(atrVal * 0.2, entry * 0.0002);
+    const sorted = [...new Set(candidates)]
+      .filter((p) => (above ? p > entry : p < entry))
+      .sort((a, b) => (above ? a - b : b - a));
+    const deduped: number[] = [];
+    for (const p of sorted) {
+      if (!deduped.length || Math.abs(p - deduped[deduped.length - 1]) > sep) deduped.push(p);
+    }
+
+    // Each TP clears its RR floor AND sits beyond the previous TP. TP1's floor
+    // is at least the engine's configured minimum R:R so the reward gate can
+    // never reject the signal. Prefer the nearest real level past the floor;
+    // when no structural target sits there, step forward from the previous TP
+    // (never backwards) so the ladder always progresses.
+    const floor = (m: number) => (above ? entry + stopDist * m : entry - stopDist * m);
+    const stepR = 0.35; // min spacing between TPs in R terms
+    const firstBeyond = (from: number, min: number): number => {
+      for (const p of deduped) {
+        if (above ? (p >= min && p > from) : (p <= min && p < from)) return p;
+      }
+      return above ? Math.max(min, from + stopDist * stepR) : Math.min(min, from - stopDist * stepR);
+    };
+
+    const [m1, m2, m3] = ladder;
+    const f1 = Math.max(m1, minRR);
+    const t1 = firstBeyond(entry, floor(f1));
+    const t2 = firstBeyond(t1, floor(Math.max(m2, f1 + 0.2)));
+    const t3 = firstBeyond(t2, floor(m3));
+    return [t1, t2, t3];
   }
 
   unpack(a: AnalysisSnapshot): void {}
