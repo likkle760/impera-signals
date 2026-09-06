@@ -25,12 +25,12 @@ import type { FairValueGap, InstrumentAnalysis } from "./analysis-types";
  */
 
 export interface ConfidenceModuleConfig {
-  /** default minimum confidence to allow a trade (0-100). Default 80. */
+  /** default minimum confidence to allow a trade (0-100). Default 70. */
   minConfidence: number;
 }
 
 export const DEFAULT_CONFIDENCE_CONFIG: ConfidenceModuleConfig = {
-  minConfidence: 80
+  minConfidence: 70
 };
 
 export interface ConfidenceBreakdown {
@@ -232,20 +232,68 @@ export function scoreConfidence(
     details.htfAligned["1h"] = true;
   }
   if (exec) { trend += 5; details.htfAligned.exec = true; }
+  // Neutral HTF but both the 1h and execution timeframes aligning = an emerging
+  // trend worth partial credit (the 4h spot is legitimately unconfirmed).
+  if (!htfBull && !htfBear && htf1 && exec) trend += 5;
   if (trend > 0) reasons.push(`Trend alignment ${trend}/20`);
+
+  // ── shared entry-zone geometry (used by structure + entry zone sections) ──
+  const price = analysis.price;
+  const sR = analysis.supportResistance;
+  const atrR = analysis.atr || price * 0.002;
+  const nearSupport = direction === "BUY" && sR.supports.some((s) => Math.abs(s.price - price) <= atrR * 1.0);
+  const nearResistance = direction === "SELL" && sR.resistances.some((r) => Math.abs(r.price - price) <= atrR * 1.0);
+  const entrySideSrs = direction === "BUY" ? sR.supports : sR.resistances;
+  const nearLevel = entrySideSrs.reduce<number | null>((acc, l) => {
+    const d = Math.abs(l.price - price) / atrR;
+    return acc === null ? d : Math.min(acc, d);
+  }, null);
+  const obSide = analysis.orderBlocks && (direction === "BUY" ? analysis.orderBlocks.bullish : analysis.orderBlocks.bearish);
+  let nearBlock: number | null = null;
+  if (obSide) {
+    nearBlock = obSide.reduce<number | null>((acc, b) => {
+      const mid = (b.high + b.low) / 2;
+      const d = Math.abs(mid - price) / atrR;
+      return acc === null ? d : Math.min(acc, d);
+    }, null);
+  }
 
   // ── MARKET STRUCTURE — 20 ───────────────────────────────────────────────
   let structure = 0;
   const struct = analysis.structure;
-  const dirStruct =
-    (direction === "BUY" && (struct.structureType === "HIGHER HIGHS" || struct.structureType === "BREAK OF STRUCTURE" || struct.structureType === "CHANGE OF CHARACTER")) ||
-    (direction === "SELL" && (struct.structureType === "LOWER LOWS" || struct.structureType === "BREAK OF STRUCTURE" || struct.structureType === "CHANGE OF CHARACTER"));
-  if (dirStruct && (struct.bos || struct.choch)) { structure += 10; details.structure.bos = struct.bos; details.structure.choch = struct.choch; }
-  // clean HH/HL or LH/LL sequence (both structure type + directionally consistent)
-  const sequence =
+  const dirBreak =
+    (direction === "BUY" && struct.structureType === "BREAK OF STRUCTURE") ||
+    (direction === "SELL" && struct.structureType === "BREAK OF STRUCTURE");
+  const dirSequence =
     (direction === "BUY" && (struct.structureType === "HIGHER HIGHS" || struct.structureType === "CHANGE OF CHARACTER")) ||
     (direction === "SELL" && (struct.structureType === "LOWER LOWS" || struct.structureType === "CHANGE OF CHARACTER"));
-  if (sequence) { structure += 10; details.structure.sequence = true; }
+  // A break of structure confirmed by an actual BOS in the trade direction =
+  // continuation MOMENTUM — worth the full structure sequence, not just the BOS.
+  // An HH/HL or LH/LL (or CHoCH) sequence confirms the price-action direction.
+  if ((dirBreak && struct.bos) || dirSequence) {
+    structure += 10;
+    details.structure.sequence = true;
+  }
+  if (struct.bos) {
+    structure += 10;
+    details.structure.bos = true;
+  } else if (struct.choch) {
+    structure += 10;
+    details.structure.choch = true;
+  }
+  // Pullback continuation: RANGE/consolidation snapping back WITH the HTF trend
+  // from a key level please. This is the classic A-quality setup (limit entry in
+  // a strong trend) — no fresh BOS/CHoCH has formed yet, but the context is real.
+  if (structure === 0 && struct.consolidation) {
+    const htfAlignedToDir = (direction === "BUY" && htfBull) || (direction === "SELL" && htfBear);
+    const atZone = (nearLevel !== null && nearLevel <= 1.0) || (nearBlock !== null && nearBlock <= 1.0);
+    if (htfAlignedToDir && atZone) {
+      structure += 6;
+      details.structure.sequence = true;
+    } else if (htfAlignedToDir) {
+      structure += 3;
+    }
+  }
   if (structure > 0) reasons.push(`Market structure ${structure}/20`);
 
   // ── LIQUIDITY — 15 ──────────────────────────────────────────────────────
@@ -256,16 +304,27 @@ export function scoreConfidence(
   details.liquidity.sweepLow = sweepLow;
   // A BUY should ride off a swept LOW (sell-side liquidity taken); SELL off swept HIGH.
   const majorSweep = direction === "BUY" ? sweepLow : sweepHigh;
-  if (majorSweep) liquidity += 10;
-  // clean rejection: price closed back inside after the sweep (conservative)
-  const price = analysis.price;
-  const sR = analysis.supportResistance;
-  const nearSupport = direction === "BUY" && sR.supports.some((s) => Math.abs(s.price - price) <= analysis.atr * 1.0);
-  const nearResistance = direction === "SELL" && sR.resistances.some((r) => Math.abs(r.price - price) <= analysis.atr * 1.0);
-  if (majorSweep && (nearSupport || nearResistance)) {
-    liquidity += 5;
-    details.liquidity.cleanRejection = true;
+  if (majorSweep) {
+    liquidity += 10;
+    // clean rejection: price closed back inside after the sweep (conservative)
+    if (nearSupport || nearResistance) {
+      liquidity += 5;
+      details.liquidity.cleanRejection = true;
+    }
+  } else {
+    // No fresh sweep yet — but trading out of a standing liquidity pocket (an
+    // equal-low cluster below a BUY / equal-high cluster above a SELL, or price
+    // sitting right on a demand/supply level) still confirms the draw context.
+    const pocket =
+      (direction === "BUY" && (analysis.liquidity.equalLows.length > 0 || analysis.liquidity.areas.some((a) => a.kind.toUpperCase().includes("EQUAL LOW")))) ||
+      (direction === "SELL" && (analysis.liquidity.equalHighs.length > 0 || analysis.liquidity.areas.some((a) => a.kind.toUpperCase().includes("EQUAL HIGH"))));
+    if (pocket && (nearSupport || nearResistance)) liquidity += 5;
   }
+  // Target-side liquidity: an unfilled sweep AHEAD in the trade direction is a
+  // magnet (buy-side pool above a BUY / sell-side below a SELL) — price is
+  // drawn toward it, boosting the odds the move completes.
+  const targetSweep = direction === "BUY" ? sweepHigh : sweepLow;
+  if (targetSweep) liquidity += 3;
   if (liquidity > 0) reasons.push(`Liquidity ${liquidity}/15`);
 
   // ── ENTRY ZONE — 15 ─────────────────────────────────────────────────────
@@ -283,14 +342,22 @@ export function scoreConfidence(
     if (fvgQuality.score >= 80) entryZone += 8;
     else if (fvgQuality.score >= 70) entryZone += 5;
     else if (fvgQuality.score >= 55) entryZone += 2;
+    // standing inside the actual gap is the strongest possible fill location
+    if (price >= entrySideFvg.lower && price <= entrySideFvg.upper) entryZone += 3;
   }
-  // Order block / S-R confluence on the entry side
-  const obHits = (analysis.orderBlocks && (direction === "BUY" ? analysis.orderBlocks.bullish.length : analysis.orderBlocks.bearish.length) > 0) || false;
-  const srHit = direction === "BUY" ? nearSupport : nearResistance;
-  if (obHits || srHit) {
-    entryZone += 7;
-    details.zoneConfluence = true;
+  // Order block / S-R confluence on the entry side — graded by *distance* to
+  // the nearest entry-side block/level, never "any block anywhere".
+  let zoneConfluence = false;
+  if (nearLevel !== null && nearLevel <= 1.5) {
+    entryZone += nearLevel <= 1.0 ? 7 : 4;
+    zoneConfluence = true;
   }
+  if (nearBlock !== null && nearBlock <= 1.5) {
+    entryZone += nearBlock <= 1.0 ? 7 : 4;
+    zoneConfluence = true;
+  }
+  if (zoneConfluence) details.zoneConfluence = true;
+  entryZone = Math.min(15, entryZone);
   if (entryZone > 0) reasons.push(`Entry zone ${entryZone}/15`);
 
   // ── MOMENTUM — 10 ───────────────────────────────────────────────────────
@@ -299,18 +366,24 @@ export function scoreConfidence(
     (analysis.displacement && (direction === "BUY" ? analysis.displacement.bullish.length > 0 : analysis.displacement.bearish.length > 0)) || false;
   details.momentum.displacement = displacement;
   if (displacement) momentum += 5;
-  const momentumConfirmed =
-    (direction === "BUY" && (analysis.indicators["5m"]?.macd?.histogram ?? 0) > 0) ||
-    (direction === "SELL" && (analysis.indicators["5m"]?.macd?.histogram ?? 0) < 0);
-  details.momentum.confirmed = momentumConfirmed;
-  if (momentumConfirmed) momentum += 5;
+  const m5hist = analysis.indicators["5m"]?.macd?.histogram ?? 0;
+  const m15hist = analysis.indicators["15m"]?.macd?.histogram ?? 0;
+  const m5Agree = (direction === "BUY" && m5hist > 0) || (direction === "SELL" && m5hist < 0);
+  const m15Agree = (direction === "BUY" && m15hist > 0) || (direction === "SELL" && m15hist < 0);
+  details.momentum.confirmed = m5Agree;
+  if (m5Agree) momentum += 3;
+  if (m15Agree) momentum += 2;
   if (momentum > 0) reasons.push(`Momentum ${momentum}/10`);
 
   // ── RISK-TO-REWARD — 10 ─────────────────────────────────────────────────
+  // partial credit from 1.2R up (the resting-limit ladder floor) — a well-placed
+  // 1.5R pullback is still a valid trade; deeper RR grades toward full marks.
   let riskReward = 0;
   details.riskReward.rr = rr;
-  if (rr >= 3) riskReward = 10;
-  else if (rr >= 2) riskReward = 5;
+  if (rr >= 2.5) riskReward = 10;
+  else if (rr >= 2) riskReward = 8;
+  else if (rr >= 1.5) riskReward = 5;
+  else if (rr >= 1.2) riskReward = 3;
   details.riskReward.rrOk2 = rr >= 2;
   details.riskReward.rrOk3 = rr >= 3;
 
@@ -320,11 +393,12 @@ export function scoreConfidence(
   const highLiquidity = sessionStr.includes("LONDON") || sessionStr.includes("NEW YORK") || sessionStr.includes("OVERLAP");
   details.session.highLiquidity = highLiquidity;
   if (highLiquidity) session += 5;
-  // dangerous = tight consolidation / extreme volatility / conflicting HTF
+// dangerous = extreme volatility OR contradictory HTF claims (both 4h bull and
+// bear flags at once). NEUTRAL/unconfirmed HTF is NOT dangerous, and a pullback
+// at a key level is the entry context, not a warning.
   const dangerous =
-    analysis.structure.consolidation === true ||
-    analysis.trend.volatilityScore > 70 ||
-    (htfBull === htfBear);
+    analysis.trend.volatilityScore > 75 ||
+    (htfBull && htfBear);
   details.session.dangerous = dangerous;
   if (!dangerous) session += 5;
   if (session > 0) reasons.push(`Session ${session}/10`);

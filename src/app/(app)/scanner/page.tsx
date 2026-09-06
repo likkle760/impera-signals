@@ -12,6 +12,14 @@ import OandaStatusBanner from "@/components/OandaStatusBanner";
 
 const FILTERS = ["All", "Forex", "Metals", "Indices", "Futures", "Commodities", "Scalps", "Day Trades", "Long", "Short", "Buy Limits", "Sell Limits", "Low Risk", "Medium Risk", "High Risk"];
 
+const GRADE_BADGE: Record<string, string> = {
+  "A+": "badge-success",
+  A: "badge-success",
+  B: "badge-warning",
+  C: "badge-warning",
+  F: "badge-neutral",
+};
+
 const container = {
   hidden: { opacity: 0 },
   visible: { opacity: 1, transition: { staggerChildren: 0.07 } },
@@ -118,6 +126,7 @@ export default function ScannerPage() {
                 <th>Setup</th>
                 <th>Dir</th>
                 <th>Score</th>
+                <th>Grade</th>
                 <th>Risk</th>
                 <th>R:R</th>
                 <th>Status</th>
@@ -176,6 +185,19 @@ export default function ScannerPage() {
                     r.signalScore === null ? "text-terminal-muted" : r.signalScore! >= 75 ? "text-terminal-accent" : "text-terminal-text"
                   }`}>
                     {r.signalScore === null ? "—" : r.signalScore}
+                  </td>
+                  <td>
+                    {r.confidenceFilter ? (
+                      <span
+                        className={`badge ${GRADE_BADGE[r.confidenceFilter.grade] ?? "badge-neutral"}`}
+                        title={r.confidenceFilter.reasons.length ? `Confidence ${r.confidenceFilter.total}/100 — ${r.confidenceFilter.reasons.join(" · ")}` : `Confidence ${r.confidenceFilter.total}/100`}
+                      >
+                        {r.confidenceFilter.grade} {r.confidenceFilter.total}
+                        {!r.confidenceFilter.passed && r.setup && <span className="opacity-70"> FAIL</span>}
+                      </span>
+                    ) : (
+                      <span className="text-terminal-muted">—</span>
+                    )}
                   </td>
                   <td>
                     {r.risk ? (

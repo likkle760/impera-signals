@@ -43,7 +43,7 @@ export default function SettingsPage() {
           />
           <p className="text-xs text-gray-500 mt-1">
             A trade only fires when the multi-confirmation engine reaches this grade.
-            90+ = A+ · 85+ = A · 80+ = B (default) · below bar = NO TRADE.
+            90+ = A+ · 85+ = A · 80+ = B · 70+ = C (default) · below bar = NO TRADE.
           </p>
         </Field>
         <Field label="Maximum Risk Level">

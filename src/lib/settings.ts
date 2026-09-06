@@ -2,7 +2,7 @@ export interface UserSettings {
   minSignalScore: number;
   maxRiskLevel: string;
   minRiskReward: number;
-  /** Minimum multi-confirmation confidence (0-100) to allow a trade. Default 80. */
+  /** Minimum multi-confirmation confidence (0-100) to allow a trade. Default 70. */
   minConfidence: number;
   scanSeconds: number;
   scalpingMode: boolean;
@@ -30,7 +30,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   minSignalScore: 62,
   maxRiskLevel: "HIGH",
   minRiskReward: 1.1,
-  minConfidence: 80,
+  minConfidence: 70,
   scanSeconds: 60,
   scalpingMode: true,
   dayTradeMode: true,
@@ -47,7 +47,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   propConsistencyCap: 0.5
 };
 
-const KEY = "impera.settings.v4";
+const KEY = "impera.settings.v5";
 
 export function loadSettings(): UserSettings {
   if (typeof window === "undefined") return DEFAULT_SETTINGS;

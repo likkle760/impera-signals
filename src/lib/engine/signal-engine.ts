@@ -791,10 +791,15 @@ export class SignalEngine {
     // never reject the signal. Prefer the nearest real level past the floor;
     // when no structural target sits there, step forward from the previous TP
     // (never backwards) so the ladder always progresses.
+    // Only pools within 4R of the entry are actionable — anything farther is a
+    // weekly/monthly magnet, not a scalp/day-trade exit, and would produce
+    // absurd R:R figures on range-bound markets.
+    const maxDistR = 4;
+    const actionable = deduped.filter((p) => Math.abs(p - entry) <= stopDist * maxDistR);
     const floor = (m: number) => (above ? entry + stopDist * m : entry - stopDist * m);
     const stepR = 0.35; // min spacing between TPs in R terms
     const firstBeyond = (from: number, min: number): number => {
-      for (const p of deduped) {
+      for (const p of actionable) {
         if (above ? (p >= min && p > from) : (p <= min && p < from)) return p;
       }
       return above ? Math.max(min, from + stopDist * stepR) : Math.min(min, from - stopDist * stepR);

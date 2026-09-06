@@ -50,8 +50,8 @@ export interface AnalysisConfig {
   scanSeconds: number;
 }
 
-/** Default minimum multi-confirmation confidence (B grade, 80%). A+/A = 90+/85+. */
-const DEFAULT_MIN_CONFIDENCE = 80;
+/** Default minimum multi-confirmation confidence (C/MODERATE+ bar). A+/A = 90+/85+. */
+const DEFAULT_MIN_CONFIDENCE = 70;
 
 export const DEFAULT_ANALYSIS_CONFIG: AnalysisConfig = {
   minSignalScore: 62,
@@ -375,7 +375,36 @@ export class AnalysisCoordinator {
       timeframes: hasSetup ? (picked!.type.includes("SCALP") ? ["5m", "15m"] : ["5m", "15m", "1h"]) : [],
       status: hasSetup ? (picked!.type.includes("LIMIT") ? "WAITING" : "ACTIVE") : noTradeDraft?.noTrade ?? null,
       updatedAt: analysis.timestamp,
-      noTradeReason: noTradeDraft?.noTrade ?? null
+      noTradeReason: noTradeDraft?.noTrade ?? null,
+      confidenceFilter: picked ? this.gradeCandidate(analysis, picked) : undefined
+    };
+  }
+
+  /**
+   * Compute the multi-confirmation confidence verdict for a draft the way the
+   * final decision gate does (same entry FVG + real TP-derived RR), so the
+   * scanner and the signal gate always agree on the grade.
+   */
+  private gradeCandidate(
+    analysis: InstrumentAnalysis,
+    draft: DraftSignal
+  ): ScannerRow["confidenceFilter"] {
+    const rr = estimateDraftRR(this.signalEngine, analysis, draft);
+    const conf = scoreConfidence(
+      draft.direction,
+      analysis,
+      rr,
+      entryFvgFor(analysis, draft.direction),
+      { minConfidence: this.config.minConfidence ?? DEFAULT_MIN_CONFIDENCE }
+    );
+    return {
+      total: conf.total,
+      grade: gradeLabel(conf.total),
+      band: confidenceBand(conf.total),
+      reasons: conf.reasons,
+      rr,
+      passed: conf.passed,
+      direction: draft.direction
     };
   }
 }
@@ -456,6 +485,27 @@ function entryFvgFor(analysis: InstrumentAnalysis, direction: "BUY" | "SELL"): F
     .filter((g) => g.type === want && !g.filled)
     .sort((a, b) => a.age - b.age);
   return candidates[0] ?? null;
+}
+
+/**
+ * Approximate the reward:risk a draft would get through buildSignal (TP1-based),
+ * so the scanner's confidence verdict mirrors the real gate without running the
+ * whole decision pipeline per symbol.
+ */
+function estimateDraftRR(
+  engine: SignalEngine,
+  analysis: InstrumentAnalysis,
+  draft: DraftSignal
+): number {
+  const instrument = { symbol: analysis.symbol, name: analysis.name, assetClass: analysis.assetClass, baseDecimals: 5 } as Instrument;
+  const sig = engine.buildSignal(
+    instrument,
+    analysis,
+    draft,
+    60,
+    { riskLevel: "LOW", riskScore: 0 }
+  );
+  return sig ? Math.max(sig.riskReward, 0) : 0;
 }
 
 function riskLevelForScore(analysis: InstrumentAnalysis, direction: "BUY" | "SELL", sessionLiq: number): RiskLevel {

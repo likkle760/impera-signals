@@ -88,7 +88,7 @@ const DECIMALS: Record<string, number> = {
 export class FuturesMarketDataProvider implements MarketDataProvider {
   readonly id = "futures-sim";
   readonly label = "Indices/Futures (simulated)";
-  readonly isLive = true;
+  readonly isLive = false;
 
   private symbols: Instrument[];
   private quotes = new Map<string, Quote>();
@@ -107,6 +107,10 @@ export class FuturesMarketDataProvider implements MarketDataProvider {
 
   getSymbols(): Instrument[] {
     return this.symbols;
+  }
+
+  isSimulatedSymbol(): boolean {
+    return true;
   }
 
   getQuote(symbol: string): Quote | undefined {

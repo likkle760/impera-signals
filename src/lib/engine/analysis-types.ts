@@ -237,6 +237,17 @@ export interface ScannerRow {
   status: string | null;
   updatedAt: number;
   noTradeReason: NoTradeReason | null;
+  /** Multi-confirmation confidence engine verdict for this symbol (defines why a
+   *  setup passed or was filtered). Present on every scanned row for transparency. */
+  confidenceFilter?: {
+    total: number;
+    grade: string;
+    band: string;
+    reasons: string[];
+    rr: number;
+    passed: boolean;
+    direction: Direction | null;
+  };
   /** True when this instrument's data comes from a simulated/demo source, not live. */
   simulated?: boolean;
 }
