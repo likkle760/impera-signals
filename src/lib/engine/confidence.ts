@@ -11,16 +11,18 @@ import type { FairValueGap, InstrumentAnalysis } from "./analysis-types";
  *   MARKET STRUCTURE       20 pts   (BOS/CHOCH 10 / HH-HL|LH-LL 10)
  *   LIQUIDITY              15 pts   (major sweep 10 / clean rejection 5)
  *   ENTRY ZONE             15 pts   (high-quality FVG 8 / OB or S-R 7)
- *   MOMENTUM               10 pts   (strong displacement 5 / confirmation 5)
- *   RISK-TO-REWARD         10 pts   (RR>=1:2 5 / RR>=1:3 10)
+ *   MOMENTUM               10 pts   (displacement + multi-TF MACD agreement)
+ *   RISK-TO-REWARD         10 pts   (RR>=1:2 8 / RR>=1:3 10)
  *   SESSION / CONDITIONS   10 pts   (high-liquidity 5 / no dangerous state 5)
  *                          ─────
  *   TOTAL                 100 pts
  *
  * A setup is only actionable when the score meets the configured minimum
- * confidence threshold (default 80%). The score is a *confluence* measure, NOT
- * a guaranteed win probability. Confidence should be calibrated against actual
- * historical results (§15).
+ * confidence threshold (default 70; A+/A/B = 90/85/80). The score is a
+ * *confluence* measure, NOT a guaranteed win probability. Two hard accuracy
+ * guards are baked in: MOMENTUM is only credited on displacement + sustained
+ * multi-TF agreement (a lone histogram is noise), and a setup with zero
+ * structural/liquidity/entry-zone basis is capped at 59 (never tradable).
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
@@ -81,6 +83,8 @@ export interface ConfidenceDetails {
   riskReward: { rr: number; rrOk2: boolean; rrOk3: boolean };
   /** session conditions */
   session: { highLiquidity: boolean; dangerous: boolean };
+  /** zero-basis veto: no structural/liquidity/entry-zone claim at all */
+  chopVeto: boolean;
 }
 
 /**
@@ -209,7 +213,8 @@ export function scoreConfidence(
     zoneConfluence: false,
     momentum: { displacement: false, confirmed: false },
     riskReward: { rr, rrOk2: rr >= 2, rrOk3: rr >= 3 },
-    session: { highLiquidity: false, dangerous: false }
+    session: { highLiquidity: false, dangerous: false },
+    chopVeto: false
   };
 
   // ── TREND ALIGNMENT — 20 ────────────────────────────────────────────────
@@ -235,6 +240,10 @@ export function scoreConfidence(
   // Neutral HTF but both the 1h and execution timeframes aligning = an emerging
   // trend worth partial credit (the 4h spot is legitimately unconfirmed).
   if (!htfBull && !htfBear && htf1 && exec) trend += 5;
+  // An unconfirmed HTF (neither a clear 4h bull nor bear stand) can't justify a
+  // full trend score — cap it at the emerging-trend credit so neutral-HTF setups
+  // need every other factor to pass. Mirrors the market-draft HTF alignment gate.
+  if (!htfBull && !htfBear && trend > 10) trend = 10;
   if (trend > 0) reasons.push(`Trend alignment ${trend}/20`);
 
   // ── shared entry-zone geometry (used by structure + entry zone sections) ──
@@ -365,14 +374,18 @@ export function scoreConfidence(
   const displacement =
     (analysis.displacement && (direction === "BUY" ? analysis.displacement.bullish.length > 0 : analysis.displacement.bearish.length > 0)) || false;
   details.momentum.displacement = displacement;
-  if (displacement) momentum += 5;
   const m5hist = analysis.indicators["5m"]?.macd?.histogram ?? 0;
   const m15hist = analysis.indicators["15m"]?.macd?.histogram ?? 0;
   const m5Agree = (direction === "BUY" && m5hist > 0) || (direction === "SELL" && m5hist < 0);
   const m15Agree = (direction === "BUY" && m15hist > 0) || (direction === "SELL" && m15hist < 0);
-  details.momentum.confirmed = m5Agree;
-  if (m5Agree) momentum += 3;
-  if (m15Agree) momentum += 2;
+  // Momentum is only credited when there is displacement AND sustained
+  // multi-timeframe MACD agreement. A lone flat histogram is noise, not
+  // confirmation — rewarding it is the classic source of chop whipsaws.
+  details.momentum.confirmed = m5Agree && m15Agree;
+  if (displacement) {
+    if (m5Agree && m15Agree) momentum = 10;
+    else if (m5Agree || m15Agree) momentum = 5;
+  }
   if (momentum > 0) reasons.push(`Momentum ${momentum}/10`);
 
   // ── RISK-TO-REWARD — 10 ─────────────────────────────────────────────────
@@ -403,7 +416,17 @@ export function scoreConfidence(
   if (!dangerous) session += 5;
   if (session > 0) reasons.push(`Session ${session}/10`);
 
-  const total = Math.max(0, Math.min(100, trend + structure + liquidity + entryZone + momentum + riskReward + session));
+  // ── HARD ACCURACY GUARD — zero-basis veto ─────────────────────────────────
+  // A setup with no structural claim, no liquidity context AND no entry zone is
+  // a coin flip, no matter how attractive its R:R or session looks. Cap it at
+  // 59 so it can never cross a tradable bar (70+).
+  const zeroBasis = structure === 0 && liquidity === 0 && entryZone === 0;
+  details.chopVeto = zeroBasis;
+  if (zeroBasis) reasons.push("No confluence basis (structure+liquidity+zone all zero)");
+
+  const rawTotal = trend + structure + liquidity + entryZone + momentum + riskReward + session;
+  const cappedTotal = zeroBasis ? Math.min(rawTotal, 59) : rawTotal;
+  const total = Math.max(0, Math.min(100, cappedTotal));
 
   return {
     trend,
