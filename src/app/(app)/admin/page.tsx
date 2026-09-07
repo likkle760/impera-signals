@@ -1,5 +1,8 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
+import { StatCard, PageHeader } from "@/components/ui";
+import { motion } from "framer-motion";
+import { ShieldCheck, KeyRound, Users, BadgeCheck, CircleX, Layers, Sparkles, CheckCircle2 } from "lucide-react";
 
 interface UserRow {
   id: string;
@@ -22,6 +25,16 @@ interface LicRow {
 }
 
 type Filter = "all" | "available" | "active" | "revoked";
+
+const container = {
+  hidden: { opacity: 0 },
+  visible: { opacity: 1, transition: { staggerChildren: 0.06 } },
+};
+
+const item = {
+  hidden: { opacity: 0, y: 16 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: [0.2, 0.8, 0.2, 1] as const } },
+};
 
 export default function AdminPage() {
   const [loading, setLoading] = useState(true);
@@ -118,96 +131,126 @@ export default function AdminPage() {
   };
 
   if (loading) {
-    return <div className="text-terminal-muted animate-pulse">Loading admin panel…</div>;
-  }
-
-  if (notAdmin) {
     return (
-      <div className="text-center py-20">
-        <div className="text-4xl mb-4">🛡</div>
-        <p className="text-terminal-muted">Admin access only.</p>
+      <div className="space-y-4">
+        <div className="skeleton-title" />
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          {Array.from({ length: 5 }).map((_, i) => <div key={i} className="skeleton-card h-24" />)}
+        </div>
       </div>
     );
   }
 
-  const filtered =
-    filter === "all" ? licenses : licenses.filter((l) => l.status === filter);
+  if (notAdmin) {
+    return (
+      <div className="panel empty-state animate-in">
+        <div className="empty-icon">🛡</div>
+        <div className="empty-title">Admin access only</div>
+        <div className="empty-desc">This panel is restricted to administrator accounts.</div>
+      </div>
+    );
+  }
+
+  const filtered = filter === "all" ? licenses : licenses.filter((l) => l.status === filter);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="panel-title text-lg text-white normal-case">ADMIN PORTAL</h2>
-        {flash && <span className="badge bg-sky-500/20 border-sky-500/40 text-sky-300">{flash}</span>}
-      </div>
+    <motion.div className="space-y-6" variants={container} initial="hidden" animate="visible">
+      <motion.div variants={item}>
+        <PageHeader
+          eyebrow="ADMIN PORTAL"
+          eyebrowIcon={<ShieldCheck className="w-3.5 h-3.5" />}
+          title="License"
+          highlight="Control"
+          description="Manage users, generate license keys and revoke access across the Impera platform."
+          right={flash && (
+            <span className="badge bg-sky-500/20 border-sky-500/40 text-sky-300 animate-scale-in">
+              <CheckCircle2 className="w-3 h-3" /> {flash}
+            </span>
+          )}
+        />
+      </motion.div>
 
       {/* Summary */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        <Stat label="TOTAL LICENSES" value={summary.total} color="text-white" />
-        <Stat label="AVAILABLE" value={summary.available} color="text-emerald-400" />
-        <Stat label="ACTIVE" value={summary.active} color="text-sky-300" />
-        <Stat label="REVOKED" value={summary.revoked} color="text-rose-400" />
-        <Stat label="USERS" value={users.length} color="text-fuchsia-300" />
-      </div>
+      <motion.div variants={item} className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <StatCard label="Total Licenses" value={summary.total} icon={<KeyRound className="w-5 h-5" />} variant="accent" />
+        <StatCard label="Available" value={summary.available} icon={<BadgeCheck className="w-5 h-5" />} variant="success" />
+        <StatCard label="Active" value={summary.active} icon={<Sparkles className="w-5 h-5" />} variant="info" />
+        <StatCard label="Revoked" value={summary.revoked} icon={<CircleX className="w-5 h-5" />} variant="danger" />
+        <StatCard label="Users" value={users.length} icon={<Users className="w-5 h-5" />} variant="warning" />
+      </motion.div>
 
       {/* Generate */}
-      <div className="panel p-4 flex items-end gap-3 flex-wrap">
-        <div>
-          <div className="text-[11px] uppercase tracking-wider text-terminal-muted mb-1">Generate keys</div>
-          <input
-            type="number" min={1} max={2000} value={genCount}
-            onChange={(e) => setGenCount(Math.max(1, Math.min(2000, +e.target.value || 1)))}
-            className="w-28 bg-terminal-panel2 border border-terminal-border rounded px-3 py-1.5 text-white text-sm"
-          />
+      <motion.div variants={item} className="card p-4 panel-hover">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-3 flex-1">
+            <div className="p-2 rounded-xl bg-terminal-accentBg text-terminal-accent border border-terminal-accent/25">
+              <Layers className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="text-sm font-semibold text-white">Generate License Keys</div>
+              <div className="text-[11px] text-terminal-muted">IMPERA-XXXX-XXXX-XXXX format</div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="number" min={1} max={2000} value={genCount}
+              onChange={(e) => setGenCount(Math.max(1, Math.min(2000, +e.target.value || 1)))}
+              className="input w-28 py-2 font-mono"
+            />
+            <button onClick={generate} disabled={busy} className="btn btn-primary">
+              {busy ? <span className="animate-pulse">…</span> : <><KeyRound className="w-4 h-4" /> GENERATE KEYS</>}
+            </button>
+          </div>
         </div>
-        <button onClick={generate} disabled={busy} className="btn btn-primary">
-          {busy ? "…" : "GENERATE KEYS"}
-        </button>
-        <span className="text-[11px] text-terminal-muted">Keys follow the IMPERA-XXXX-XXXX-XXXX format.</span>
-      </div>
+      </motion.div>
 
       {/* Users */}
-      <div className="panel overflow-hidden">
-        <div className="p-4 border-b border-terminal-border">
-          <h3 className="panel-title">USERS ({users.length})</h3>
+      <motion.div variants={item} className="card overflow-hidden panel-hover">
+        <div className="p-4 border-b border-terminal-border/60 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Users className="w-4 h-4 text-terminal-accent" />
+            <h3 className="panel-title">USERS ({users.length})</h3>
+          </div>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="table">
             <thead>
-              <tr className="text-left text-[11px] uppercase tracking-wider text-terminal-muted border-b border-terminal-border">
-                <th className="p-3">User</th>
-                <th className="p-3">Role</th>
-                <th className="p-3">License</th>
-                <th className="p-3">Created</th>
-                <th className="p-3">Last Login</th>
-                <th className="p-3">Status</th>
-                <th className="p-3" />
+              <tr>
+                <th>User</th>
+                <th>Role</th>
+                <th>License</th>
+                <th>Created</th>
+                <th>Last Login</th>
+                <th>Status</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
               {users.map((u) => (
-                <tr key={u.id} className="border-b border-terminal-border/50 hover:bg-terminal-panel/40">
-                  <td className="p-3">
-                    <div className="text-white">{u.name}</div>
+                <tr key={u.id}>
+                  <td>
+                    <div className="text-terminal-text font-medium">{u.name}</div>
                     <div className="text-[11px] text-terminal-muted">{u.email}</div>
                   </td>
-                  <td className="p-3">
+                  <td>
                     <span className={`badge ${u.role === "admin" ? "bg-fuchsia-500/15 border-fuchsia-500/40 text-fuchsia-300" : "bg-sky-500/10 border-sky-500/30 text-sky-300"}`}>
                       {u.role.toUpperCase()}
                     </span>
                   </td>
-                  <td className="p-3 mono text-[11px] text-terminal-muted">{u.licenseKey}</td>
-                  <td className="p-3 text-[11px] text-terminal-muted">{new Date(u.createdAt).toLocaleDateString()}</td>
-                  <td className="p-3 text-[11px] text-terminal-muted">{u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleString() : "—"}</td>
-                  <td className="p-3">
-                    <span className={`badge ${u.revoked ? "bg-rose-500/15 border-rose-500/40 text-rose-400" : "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"}`}>
+                  <td className="font-mono text-[11px] text-terminal-muted">{u.licenseKey}</td>
+                  <td className="text-[11px] text-terminal-muted">{new Date(u.createdAt).toLocaleDateString()}</td>
+                  <td className="text-[11px] text-terminal-muted">{u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleString() : "—"}</td>
+                  <td>
+                    <span className={`badge ${u.revoked ? "badge-danger" : "badge-success"}`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${u.revoked ? "bg-rose-400" : "bg-emerald-400 animate-pulse-live"}`} />
                       {u.revoked ? "REVOKED" : "ACTIVE"}
                     </span>
                   </td>
-                  <td className="p-3">
+                  <td>
                     {u.role !== "admin" && !u.revoked && (
                       <button
                         onClick={() => revokeUser(u.id)}
-                        className="badge cursor-pointer bg-rose-500/10 border-rose-500/40 text-rose-400 hover:bg-rose-500/25"
+                        className="btn btn-danger btn-sm px-2 py-1"
                       >
                         Revoke
                       </button>
@@ -221,55 +264,59 @@ export default function AdminPage() {
             </tbody>
           </table>
         </div>
-      </div>
+      </motion.div>
 
       {/* Licenses */}
-      <div className="panel overflow-hidden">
-        <div className="p-4 border-b border-terminal-border flex items-center justify-between flex-wrap gap-3">
-          <h3 className="panel-title">LICENSE KEYS ({licenses.length})</h3>
-          <div className="flex gap-1 flex-wrap">
+      <motion.div variants={item} className="card overflow-hidden panel-hover">
+        <div className="p-4 border-b border-terminal-border/60 flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-2">
+            <KeyRound className="w-4 h-4 text-terminal-accent" />
+            <h3 className="panel-title">LICENSE KEYS ({licenses.length})</h3>
+          </div>
+          <div className="flex gap-1.5 flex-wrap">
             {(["all", "available", "active", "revoked"] as Filter[]).map((f) => (
               <button
                 key={f}
                 onClick={() => setFilter(f)}
-                className={`badge cursor-pointer border ${
-                  filter === f ? "bg-sky-500/20 border-sky-500/50 text-sky-300" : "bg-terminal-panel2 border-terminal-border text-terminal-muted hover:text-white"
-                }`}
+                className={`filter-chip ${filter === f ? "filter-chip-active" : ""}`}
               >
                 {f.toUpperCase()}
+                <span className="text-[10px] opacity-70">
+                  {f === "all" ? licenses.length : licenses.filter((l) => l.status === f).length}
+                </span>
               </button>
             ))}
           </div>
         </div>
-        <div className="max-h-[480px] overflow-y-auto">
-          <table className="w-full text-sm">
-            <thead className="sticky top-0 bg-terminal-panel">
-              <tr className="text-left text-[11px] uppercase tracking-wider text-terminal-muted border-b border-terminal-border">
-                <th className="p-3">Key</th>
-                <th className="p-3">Status</th>
-                <th className="p-3">Assigned To</th>
-                <th className="p-3">Activated</th>
-                <th className="p-3" />
+        <div className="max-h-[520px] overflow-y-auto">
+          <table className="table">
+            <thead className="sticky top-0 bg-terminal-bgElevated/95 backdrop-blur-xl z-10">
+              <tr>
+                <th>Key</th>
+                <th>Status</th>
+                <th>Assigned To</th>
+                <th>Activated</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
               {filtered.map((l) => (
-                <tr key={l.key} className="border-b border-terminal-border/50 hover:bg-terminal-panel/40">
-                  <td className="p-3 mono text-[11px] text-white">{l.key}</td>
-                  <td className="p-3">
+                <tr key={l.key}>
+                  <td className="font-mono text-[11px] text-terminal-text">{l.key}</td>
+                  <td>
                     <span className={`badge ${
-                      l.status === "available" ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
-                      : l.status === "active" ? "bg-sky-500/10 border-sky-500/30 text-sky-300"
-                      : "bg-rose-500/15 border-rose-500/40 text-rose-400"
+                      l.status === "available" ? "badge-success"
+                      : l.status === "active" ? "badge-info"
+                      : "badge-danger"
                     }`}>{l.status.toUpperCase()}</span>
                   </td>
-                  <td className="p-3 text-[11px] text-terminal-muted">{l.assignedEmail || "—"}</td>
-                  <td className="p-3 text-[11px] text-terminal-muted">{l.activatedAt ? new Date(l.activatedAt).toLocaleDateString() : "—"}</td>
-                  <td className="p-3">
+                  <td className="text-[11px] text-terminal-muted">{l.assignedEmail || "—"}</td>
+                  <td className="text-[11px] text-terminal-muted">{l.activatedAt ? new Date(l.activatedAt).toLocaleDateString() : "—"}</td>
+                  <td>
                     {l.status !== "revoked" && (
                       <button
                         onClick={() => revokeKey(l.key)}
-                        className="badge cursor-pointer bg-rose-500/10 border-rose-500/40 text-rose-400 hover:bg-rose-500/25"
+                        className="btn btn-danger btn-sm px-2 py-1"
                       >
                         Revoke
                       </button>
@@ -283,16 +330,7 @@ export default function AdminPage() {
             </tbody>
           </table>
         </div>
-      </div>
-    </div>
-  );
-}
-
-function Stat({ label, value, color }: { label: string; value: number; color: string }) {
-  return (
-    <div className="panel p-4">
-      <div className={`text-2xl font-bold ${color}`}>{value}</div>
-      <div className="text-[11px] uppercase tracking-wider text-terminal-muted mt-1">{label}</div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }

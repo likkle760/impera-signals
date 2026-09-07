@@ -13,10 +13,25 @@ import {
 } from "lightweight-charts";
 import { useMarketState } from "@/lib/hooks/use-market-store";
 import type { Timeframe } from "@/lib/types";
+import { PageHeader, LiveValue } from "@/components/ui";
+import { motion } from "framer-motion";
+import { CandlestickChart, Activity, Waves, Gauge, Layers, Map, LineChart, Boxes, Ruler } from "lucide-react";
+import { formatPrice } from "@/lib/utils";
+import { decimalsFor } from "@/lib/formatting";
 
 const TIMEFRAMES: Timeframe[] = ["5m", "15m", "30m", "1h", "4h", "1d"];
 
 type Bar = { time: UTCTimestamp; open: number; high: number; low: number; close: number };
+
+const CONTAINER = {
+  hidden: { opacity: 0 },
+  visible: { opacity: 1, transition: { staggerChildren: 0.07 } },
+};
+
+const ITEM = {
+  hidden: { opacity: 0, y: 16 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: [0.2, 0.8, 0.2, 1] as const } },
+};
 
 function emaSeries(closes: number[], period: number): (number | null)[] {
   const out: (number | null)[] = new Array(closes.length).fill(null);
@@ -133,6 +148,21 @@ function toData(candles: Bar[], values: (number | null)[]): { time: UTCTimestamp
     .filter((x): x is { time: UTCTimestamp; value: number } => x != null);
 }
 
+const CHART_BG = "#0b1324";
+const CHART_GRID = "#16213a";
+const CHART_EDGE = "#26334d";
+const CHART_TEXT = "#94a3b8";
+
+const INDICATORS: { key: string; label: string; icon: React.ReactNode; active: boolean; group: "overlay" | "pane" }[] = [
+  { key: "showEma", label: "EMA 20/50", icon: <LineChart className="w-3.5 h-3.5" />, active: true, group: "overlay" },
+  { key: "showVol", label: "Volume", icon: <Boxes className="w-3.5 h-3.5" />, active: true, group: "overlay" },
+  { key: "showBoll", label: "Bollinger", icon: <Gauge className="w-3.5 h-3.5" />, active: false, group: "overlay" },
+  { key: "showVwap", label: "VWAP", icon: <Waves className="w-3.5 h-3.5" />, active: false, group: "overlay" },
+  { key: "showRsi", label: "RSI 14", icon: <Activity className="w-3.5 h-3.5" />, active: false, group: "pane" },
+  { key: "showMacd", label: "MACD", icon: <Layers className="w-3.5 h-3.5" />, active: false, group: "pane" },
+  { key: "showZones", label: "OB Zones", icon: <Map className="w-3.5 h-3.5" />, active: true, group: "overlay" },
+];
+
 export default function ChartsPage() {
   const state = useMarketState();
   const instruments = Object.values(state.snapshot.instruments || {});
@@ -163,19 +193,19 @@ export default function ChartsPage() {
 
     const chart: IChartApi = createChart(containerRef.current, {
       layout: {
-        background: { type: ColorType.Solid, color: "#0b0f17" },
-        textColor: "#c9d1d9",
-        fontFamily: "'IBM Plex Sans', system-ui, sans-serif"
+        background: { type: ColorType.Solid, color: CHART_BG },
+        textColor: CHART_TEXT,
+        fontFamily: "Inter, system-ui, sans-serif"
       },
-      grid: { vertLines: { color: "#131a26" }, horzLines: { color: "#131a26" } },
-      crosshair: { mode: CrosshairMode.Normal, vertLine: { color: "#3b4657" }, horzLine: { color: "#3b4657" } },
-      rightPriceScale: { borderColor: "#2d333b" },
-      timeScale: { borderColor: "#2d333b", timeVisible: true, secondsVisible: false, rightOffset: 4 },
+      grid: { vertLines: { color: CHART_GRID }, horzLines: { color: CHART_GRID } },
+      crosshair: { mode: CrosshairMode.Normal, vertLine: { color: "#3b4657", width: 1, style: 3 }, horzLine: { color: "#3b4657", width: 1, style: 3 } },
+      rightPriceScale: { borderColor: CHART_EDGE },
+      timeScale: { borderColor: CHART_EDGE, timeVisible: true, secondsVisible: false, rightOffset: 4 },
       autoSize: true,
       watermark: {
         visible: true,
         text: symbol,
-        color: "#1c2333",
+        color: "#1a2440",
         fontSize: 64,
         fontStyle: "bold"
       }
@@ -203,9 +233,6 @@ export default function ChartsPage() {
     const bollLower = showBoll ? chart.addLineSeries({ color: "rgba(167,139,250,0.8)", lineWidth: 1, priceLineVisible: false, lastValueVisible: false, title: "Boll L" }) : null;
     const vwapLine = showVwap ? chart.addLineSeries({ color: "#e879f9", lineWidth: 1, priceLineVisible: false, lastValueVisible: false, title: "VWAP" }) : null;
 
-    const rsiPane: number | null = null;
-    const macdPane: number | null = null;
-
     const zoneMarkers: ISeriesApi<"Line"> | null = showZones ? chart.addLineSeries({ color: "transparent", priceLineVisible: false, lastValueVisible: false }) : null;
 
     const src = state.snapshot.instruments[symbol]?.series.find((s) => s.timeframe === tf);
@@ -219,8 +246,6 @@ export default function ChartsPage() {
     }));
     candleSeries.setData(bars);
 
-    // Real EMA overlay: compute the actual rolling EMA value for every candle so
-    // the line is an accurate moving average, not a flat last-value step.
     const closes = candles.map((c) => c.close);
     if (showEma) {
       const e20 = emaSeries(closes, 20);
@@ -297,10 +322,10 @@ export default function ChartsPage() {
       const dir = bar.close >= bar.open ? "▲" : "▼";
       const col = bar.close >= bar.open ? "#26a69a" : "#ef5350";
       el.innerHTML =
-        `<span style="color:#8b949e">O</span> <span style="color:#e6edf3">${bar.open.toFixed(4)}</span> ` +
-        `<span style="color:#8b949e">H</span> <span style="color:#e6edf3">${bar.high.toFixed(4)}</span> ` +
-        `<span style="color:#8b949e">L</span> <span style="color:#e6edf3">${bar.low.toFixed(4)}</span> ` +
-        `<span style="color:#8b949e">C</span> <span style="color:${col}">${close.toFixed(4)}</span> ` +
+        `<span style="color:#64748b">O</span> <span style="color:#e2e8f0">${bar.open.toFixed(4)}</span> ` +
+        `<span style="color:#64748b">H</span> <span style="color:#e2e8f0">${bar.high.toFixed(4)}</span> ` +
+        `<span style="color:#64748b">L</span> <span style="color:#e2e8f0">${bar.low.toFixed(4)}</span> ` +
+        `<span style="color:#64748b">C</span> <span style="color:${col}">${close.toFixed(4)}</span> ` +
         `<span style="color:${col}">${dir}</span>`;
     };
     chart.subscribeCrosshairMove(updateLegend);
@@ -321,7 +346,6 @@ export default function ChartsPage() {
         close: c.close
       }));
       candleSeries.setData(liveBars);
-      // Live EMA update
       if (showEma) {
         const lc = s.candles.map((c) => c.close);
         const e20 = emaSeries(lc, 20);
@@ -352,20 +376,18 @@ export default function ChartsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [symbol, tf, showEma, showVol, showBoll, showVwap, showRsi, showMacd, showZones, instrument?.symbol]);
 
-  // Bottom indicator subchart (RSI / MACD) — a second lightweight-chart instance,
-  // the standard way to get "panes" on lightweight-charts v4.
   useEffect(() => {
     const el = subRef.current;
     if (!el || !instrument) return;
     if (!showRsi && !showMacd) return;
 
     const chart: IChartApi = createChart(el, {
-      layout: { background: { type: ColorType.Solid, color: "#0b0f17" }, textColor: "#c9d1d9", fontFamily: "'IBM Plex Sans', system-ui, sans-serif" },
-      grid: { vertLines: { color: "#131a26" }, horzLines: { color: "#131a26" } },
-      rightPriceScale: { borderColor: "#2d333b" },
-      timeScale: { borderColor: "#2d333b", timeVisible: true, secondsVisible: false, rightOffset: 4 },
+      layout: { background: { type: ColorType.Solid, color: CHART_BG }, textColor: CHART_TEXT, fontFamily: "Inter, system-ui, sans-serif" },
+      grid: { vertLines: { color: CHART_GRID }, horzLines: { color: CHART_GRID } },
+      rightPriceScale: { borderColor: CHART_EDGE },
+      timeScale: { borderColor: CHART_EDGE, timeVisible: true, secondsVisible: false, rightOffset: 4 },
       autoSize: true,
-      watermark: { visible: true, text: showRsi ? "RSI 14" : "MACD", color: "#1c2333", fontSize: 48, fontStyle: "bold" }
+      watermark: { visible: true, text: showRsi ? "RSI 14" : "MACD", color: "#1a2440", fontSize: 48, fontStyle: "bold" }
     });
 
     const src = state.snapshot.instruments[symbol]?.series.find((s) => s.timeframe === tf);
@@ -399,122 +421,144 @@ export default function ChartsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [symbol, tf, showRsi, showMacd, instrument?.symbol]);
 
-  if (!instrument) return <div style={{ padding: 20, color: "#8b949e" }}>No market data yet…</div>;
+  if (!instrument) {
+    return (
+      <motion.div className="panel empty-state" variants={CONTAINER} initial="hidden" animate="visible">
+        <div className="empty-icon">◈</div>
+        <div className="empty-title">No market data yet</div>
+        <div className="empty-desc">Charts will render as soon as the live feed connects.</div>
+      </motion.div>
+    );
+  }
+
+  const cash = decimalsFor(symbol);
 
   return (
-    <div style={{ minHeight: "100vh", padding: 20, color: "#e6edf3", background: "#0b0f17", fontFamily: "'IBM Plex Sans', system-ui, sans-serif" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 4 }}>
-        <h1 style={{ fontSize: 20, margin: 0, fontWeight: 600 }}>TradingView-Style Charts</h1>
-        <span className="badge" style={{ color: state.connection === "connected" ? "#2ea043" : "#d29922", background: state.connection === "connected" ? "rgba(46,160,67,0.12)" : "rgba(210,153,34,0.12)", border: "1px solid currentColor" }}>
-          {state.connection === "connected" ? "● live" : "○ connecting"}
-        </span>
-        <div ref={legendRef} style={{ fontSize: 12, fontFamily: "ui-monospace, monospace", marginLeft: "auto" }}>—</div>
-      </div>
-
-      <div className="tv-row" style={{ margin: "14px 0" }}>
-        <select value={symbol} onChange={(e) => setSymbol(e.target.value)} className="tv-select">
-          {instruments.map((i) => (
-            <option key={i.symbol} value={i.symbol}>
-              {i.symbol} — {i.name} ({i.assetClass})
-            </option>
-          ))}
-        </select>
-
-        <div className="tv-row" style={{ gap: 6 }}>
-          {TIMEFRAMES.map((t) => (
-            <button key={t} className={`tv-chip ${t === tf ? "active" : ""}`} onClick={() => setTf(t)}>
-              {t}
-            </button>
-          ))}
-        </div>
-
-        <div className="tv-row" style={{ gap: 16, fontSize: 13 }}>
-          <label className="tv-label">
-            <span className="tv-switch">
-              <input type="checkbox" checked={showEma} onChange={(e) => setShowEma(e.target.checked)} />
-              <span className="track" />
+    <motion.div className="space-y-6" variants={CONTAINER} initial="hidden" animate="visible">
+      <motion.div variants={ITEM}>
+        <PageHeader
+          eyebrow="PRO CHARTS"
+          eyebrowIcon={<CandlestickChart className="w-3.5 h-3.5" />}
+          title="Market"
+          highlight="Charts"
+          description="TradingView-grade charting with real EMA/Bollinger/VWAP overlays, RSI & MACD panes and live order-block markers."
+          right={
+            <span className={`live-indicator ${state.connection === "connected" ? "live-indicator-live" : "live-indicator-connecting"}`}>
+              <span className={`live-dot ${state.connection === "connected" ? "live-dot-live" : "live-dot-connecting"}`} />
+              {state.connection === "connected" ? "LIVE FEED" : "CONNECTING"}
             </span>
-            EMA 20/50
-          </label>
-          <label className="tv-label">
-            <span className="tv-switch">
-              <input type="checkbox" checked={showVol} onChange={(e) => setShowVol(e.target.checked)} />
-              <span className="track" />
-            </span>
-            Volume
-          </label>
-          <label className="tv-label">
-            <span className="tv-switch">
-              <input type="checkbox" checked={showBoll} onChange={(e) => setShowBoll(e.target.checked)} />
-              <span className="track" />
-            </span>
-            Bollinger
-          </label>
-          <label className="tv-label">
-            <span className="tv-switch">
-              <input type="checkbox" checked={showVwap} onChange={(e) => setShowVwap(e.target.checked)} />
-              <span className="track" />
-            </span>
-            VWAP
-          </label>
-          <label className="tv-label">
-            <span className="tv-switch">
-              <input type="checkbox" checked={showRsi} onChange={(e) => setShowRsi(e.target.checked)} />
-              <span className="track" />
-            </span>
-            RSI 14
-          </label>
-          <label className="tv-label">
-            <span className="tv-switch">
-              <input type="checkbox" checked={showMacd} onChange={(e) => setShowMacd(e.target.checked)} />
-              <span className="track" />
-            </span>
-            MACD
-          </label>
-          <label className="tv-label">
-            <span className="tv-switch">
-              <input type="checkbox" checked={showZones} onChange={(e) => setShowZones(e.target.checked)} />
-              <span className="track" />
-            </span>
-            OB zones
-          </label>
-        </div>
-      </div>
-
-      <div style={{ marginBottom: 8, display: "flex", gap: 18, flexWrap: "wrap", fontSize: 13 }}>
-        <span>Price: <b style={{ color: "#58a6ff" }}>{Number.isFinite(instrument.price) ? instrument.price.toFixed(4) : "—"}</b></span>
-        <span>Trend: <b style={{ color: "#58a6ff" }}>{instrument.trend?.regime ?? "—"}</b></span>
-        <span>Session: <b style={{ color: "#58a6ff" }}>{instrument.session ?? "—"}</b></span>
-        {instrument.orderBlocks && instrument.orderBlocks.bullish.length > 0 && (
-          <span>Demand zones: <b style={{ color: "#26a69a" }}>{instrument.orderBlocks.bullish.length}</b></span>
-        )}
-        {instrument.orderBlocks && instrument.orderBlocks.bearish.length > 0 && (
-          <span>Supply zones: <b style={{ color: "#ef5350" }}>{instrument.orderBlocks.bearish.length}</b></span>
-        )}
-      </div>
-
-      <div
-        ref={containerRef}
-        style={{
-          width: "100%",
-          height: 560,
-          borderRadius: 8,
-          overflow: "hidden",
-          border: "1px solid #21262d",
-          transition: "border-color 200ms cubic-bezier(0.2,0.8,0.2,1), box-shadow 200ms cubic-bezier(0.2,0.8,0.2,1)"
-        }}
-        onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.borderColor = "#3b4657"; }}
-        onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.borderColor = "#21262d"; }}
-      />
-      {(showRsi || showMacd) && (
-        <div
-          ref={subRef}
-          style={{ width: "100%", height: 180, marginTop: 8, borderRadius: 8, overflow: "hidden", border: "1px solid #21262d" }}
+          }
         />
+      </motion.div>
+
+      {/* Toolbar */}
+      <motion.div variants={ITEM} className="panel p-3 panel-hover">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative flex-1 min-w-[180px] max-w-xs">
+            <CandlestickChart className="w-4 h-4 text-terminal-muted absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <select value={symbol} onChange={(e) => setSymbol(e.target.value)} className="select py-2 pl-9">
+              {instruments.map((i) => (
+                <option key={i.symbol} value={i.symbol}>
+                  {i.symbol} — {i.name} ({i.assetClass})
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="h-6 w-px bg-terminal-border/70 hidden sm:block" />
+          <div className="flex flex-wrap gap-1.5">
+            {TIMEFRAMES.map((t) => (
+              <button key={t} onClick={() => setTf(t)} className={`filter-chip ${t === tf ? "filter-chip-active" : ""}`}>
+                {t}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="hairline my-3" />
+
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="flex items-center gap-1.5 text-caption uppercase tracking-wider text-terminal-muted mr-1">
+            <Ruler className="w-3.5 h-3.5" /> Indicators
+          </span>
+          {INDICATORS.map((ind) => {
+            const active = ind.key === "showEma" ? showEma : ind.key === "showVol" ? showVol : ind.key === "showBoll" ? showBoll : ind.key === "showVwap" ? showVwap : ind.key === "showRsi" ? showRsi : ind.key === "showMacd" ? showMacd : showZones;
+            const flip = () => {
+              switch (ind.key) {
+                case "showEma": return setShowEma(!showEma);
+                case "showVol": return setShowVol(!showVol);
+                case "showBoll": return setShowBoll(!showBoll);
+                case "showVwap": return setShowVwap(!showVwap);
+                case "showRsi": return setShowRsi(!showRsi);
+                case "showMacd": return setShowMacd(!showMacd);
+                case "showZones": return setShowZones(!showZones);
+              }
+            };
+            return (
+              <button key={ind.key} onClick={flip} className={`filter-chip ${active ? "filter-chip-active" : ""}`}>
+                {ind.icon} {ind.label}
+              </button>
+            );
+          })}
+        </div>
+      </motion.div>
+
+      {/* Instrument summary strip */}
+      <motion.div variants={ITEM} className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+        <SummaryCell label="Price" value={<LiveValue value={instrument.price} decimals={cash} className="font-mono text-terminal-text" />} />
+        <SummaryCell label="Trend" value={<span className={`font-semibold ${instrument.trend?.regime === "BULLISH" ? "text-terminal-bull" : instrument.trend?.regime === "BEARISH" ? "text-terminal-bear" : "text-terminal-muted"}`}>{instrument.trend?.regime ?? "—"}</span>} />
+        <SummaryCell label="Strength" value={<span className="font-mono text-sky-300">{instrument.trend?.strength ?? "—"}/100</span>} />
+        <SummaryCell label="Session" value={<span className="text-sky-300">{instrument.session ?? "—"}</span>} />
+        <SummaryCell label="Demand Zones" value={<span className="font-mono text-emerald-400">{instrument.orderBlocks?.bullish?.length ?? 0}</span>} />
+        <SummaryCell label="Supply Zones" value={<span className="font-mono text-rose-400">{instrument.orderBlocks?.bearish?.length ?? 0}</span>} />
+      </motion.div>
+
+      {/* Main chart */}
+      <motion.div variants={ITEM} className="card p-0 overflow-hidden">
+        <div className="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-terminal-border/50">
+          <span className="inline-flex items-center gap-2 font-semibold text-terminal-text text-sm">
+            <CandlestickChart className="w-4 h-4 text-terminal-accent" />
+            {symbol} <span className="text-terminal-muted font-normal text-xs">{tf.toUpperCase()} · {instrument.name}</span>
+          </span>
+          <div
+            ref={legendRef}
+            className="font-mono text-xs text-terminal-textDim tabular-nums whitespace-nowrap overflow-hidden"
+          >—</div>
+        </div>
+        <div
+          ref={containerRef}
+          className="w-full"
+          style={{ height: 520 }}
+        />
+      </motion.div>
+
+      {/* Subchart pane */}
+      {(showRsi || showMacd) && (
+        <motion.div variants={ITEM} className="card p-0 overflow-hidden">
+          <div className="px-4 py-2.5 border-b border-terminal-border/50">
+            <span className="inline-flex items-center gap-2 text-xs font-semibold text-terminal-text">
+              {showRsi ? <Activity className="w-3.5 h-3.5 text-terminal-accent" /> : <Layers className="w-3.5 h-3.5 text-terminal-accent" />}
+              {showRsi ? "RSI 14 — momentum oscillator" : "MACD 12/26/9 — trend momentum"}
+            </span>
+          </div>
+          <div ref={subRef} className="w-full" style={{ height: 180 }} />
+        </motion.div>
       )}
-      <p style={{ fontSize: 11, color: "#4b5563", marginTop: 8 }}>
-        Hover/pan/zoom to inspect. Toggle EMA20/50, Bollinger, VWAP, RSI 14 &amp; MACD (bottom pane) and order-block zone markers, all updated live. Indices/futures feed is simulated (no free live feed). Not financial advice.
-      </p>
+
+      <motion.div variants={ITEM} className="panel p-3 panel-hover flex flex-wrap items-center justify-between gap-2 text-caption text-terminal-muted">
+        <span className="flex items-center gap-2">
+          <Activity className="w-3.5 h-3.5 text-terminal-accent" /> Hover, pan &amp; zoom to inspect. All overlays update live every 1.5s.
+        </span>
+        <span>Indices/futures feed is simulated (no free live feed). Not financial advice.</span>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+function SummaryCell({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="panel-section px-3 py-2.5">
+      <div className="text-[10px] uppercase tracking-wider text-terminal-muted mb-0.5">{label}</div>
+      <div className="text-sm flex items-center justify-between">{value}</div>
     </div>
   );
 }

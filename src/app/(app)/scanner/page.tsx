@@ -33,11 +33,13 @@ const item = {
 export default function ScannerPage() {
   const state = useMarketState();
   const [filter, setFilter] = useState<string>("All");
+  const [q, setQ] = useState("");
 
   const rows = useMemo(() => {
     let rows = [...state.snapshot.scanner];
     const assetClass = filter.toLowerCase();
     rows = rows.filter((r) => {
+      if (q && !r.symbol.toLowerCase().includes(q.toLowerCase())) return false;
       const hasSetup = !!r.setup;
       if (!hasSetup && ["Scalps", "Day Trades", "Long", "Short", "Buy Limits", "Sell Limits", "Low Risk", "Medium Risk", "High Risk"].includes(filter)) return false;
       if (filter === "All") return true;
@@ -56,7 +58,7 @@ export default function ScannerPage() {
 
     rows.sort((a, b) => (b.signalScore ?? -1) - (a.signalScore ?? -1));
     return rows;
-  }, [state.snapshot.scanner, filter]);
+  }, [state.snapshot.scanner, filter, q]);
 
   const withSetup = rows.filter((r) => !!r.setup);
   const activeSignals = rows.filter((r) => r.status === "ACTIVE").length;
@@ -101,7 +103,17 @@ export default function ScannerPage() {
       </motion.div>
 
       {/* Filters */}
-      <motion.div variants={item} className="flex flex-wrap gap-2">
+      <motion.div variants={item} className="flex flex-wrap gap-2 items-center">
+        <div className="relative">
+          <Search className="w-4 h-4 text-terminal-muted absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search symbol…"
+            className="input w-52 py-2 pl-9"
+          />
+        </div>
+        <div className="h-6 w-px bg-terminal-border/70 mx-1 hidden sm:block" />
         {FILTERS.map((f) => (
           <button
             key={f}
@@ -185,6 +197,17 @@ export default function ScannerPage() {
                     r.signalScore === null ? "text-terminal-muted" : r.signalScore! >= 75 ? "text-terminal-accent" : "text-terminal-text"
                   }`}>
                     {r.signalScore === null ? "—" : r.signalScore}
+                    {r.signalScore != null && (
+                      <span className="strength-bar block w-14 mt-1">
+                        <span
+                          className="block h-full rounded-full"
+                          style={{
+                            width: "100%",
+                            background: r.signalScore >= 75 ? "linear-gradient(90deg,#22d3ee,#818cf8)" : r.signalScore >= 60 ? "linear-gradient(90deg,#f59e0b,#fbbf24)" : "linear-gradient(90deg,#64748b,#94a3b8)",
+                          }}
+                        />
+                      </span>
+                    )}
                   </td>
                   <td>
                     {r.confidenceFilter ? (

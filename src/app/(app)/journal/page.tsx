@@ -14,6 +14,9 @@ import {
   pnlText,
   newTradeId
 } from "@/lib/engine/journal";
+import { StatCard, PageHeader } from "@/components/ui";
+import { motion, AnimatePresence } from "framer-motion";
+import { BookOpen, Plus, CalendarDays, List, Wallet, Target, Trophy, BarChart3 } from "lucide-react";
 
 const MONTHS = [
   "January", "February", "March", "April", "May", "June",
@@ -36,6 +39,16 @@ function startOfDay(ts: number): number {
   d.setHours(0, 0, 0, 0);
   return d.getTime();
 }
+
+const container = {
+  hidden: { opacity: 0 },
+  visible: { opacity: 1, transition: { staggerChildren: 0.06 } },
+};
+
+const item = {
+  hidden: { opacity: 0, y: 16 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: [0.2, 0.8, 0.2, 1] as const } },
+};
 
 export default function JournalPage() {
   const [trades, setTrades] = useState<JournalTrade[]>(() => loadJournal());
@@ -209,168 +222,195 @@ export default function JournalPage() {
   }, [trades]);
 
   return (
-    <div className="space-y-4">
-      {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-lg font-semibold text-white">Trade Journal</h1>
-          <p className="text-xs text-terminal-muted">Log your trades, track your profits, review your performance.</p>
-        </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setView(view === "calendar" ? "list" : "calendar")}
-            className="btn btn-ghost"
-          >
-            {view === "calendar" ? "List View" : "Calendar View"}
-          </button>
-          <button onClick={() => openForm()} className="btn btn-primary">+ Log Trade</button>
-        </div>
-      </div>
+    <motion.div className="space-y-6" variants={container} initial="hidden" animate="visible">
+      <motion.div variants={item}>
+        <PageHeader
+          eyebrow="TRADE JOURNAL"
+          eyebrowIcon={<BookOpen className="w-3.5 h-3.5" />}
+          title="Performance"
+          highlight="Journal"
+          description="Log your trades, track your profits, review your performance. Calendar view for daily P&L, list view for the full ledger."
+          right={
+            <>
+              <div className="segmented">
+                <button
+                  onClick={() => setView("calendar")}
+                  className={`segmented-item ${view === "calendar" ? "segmented-item-active" : ""}`}
+                >
+                  <CalendarDays className="w-3.5 h-3.5 inline -mt-0.5 mr-1" /> Calendar
+                </button>
+                <button
+                  onClick={() => setView("list")}
+                  className={`segmented-item ${view === "list" ? "segmented-item-active" : ""}`}
+                >
+                  <List className="w-3.5 h-3.5 inline -mt-0.5 mr-1" /> Ledger
+                </button>
+              </div>
+              <button onClick={() => openForm()} className="btn btn-primary btn-sm">
+                <Plus className="w-4 h-4" /> Log Trade
+              </button>
+            </>
+          }
+        />
+      </motion.div>
 
       {/* Stats dashboard */}
-      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3">
-        <StatCard label="Net P&L" value={`$${pnlText(stats.netPnl)}`} accent={stats.netPnl >= 0 ? "text-emerald-400" : "text-rose-400"} />
-        <StatCard label="Win Rate" value={`${stats.winRate.toFixed(1)}%`} accent="text-sky-300" sub={`${stats.wins}W / ${stats.losses}L`} />
-        <StatCard label="Trades" value={String(stats.closedTrades)} accent="text-white" sub={`${stats.activeTrades} open`} />
-        <StatCard label="Profit Factor" value={isFinite(stats.profitFactor) ? stats.profitFactor.toFixed(2) : "—"} accent="text-emerald-400" />
-        <StatCard label="Expectancy" value={`$${stats.expectancy.toFixed(2)}`} accent={stats.expectancy >= 0 ? "text-emerald-400" : "text-rose-400"} />
-        <StatCard label="Avg Win" value={`$${stats.avgWin.toFixed(2)}`} accent="text-emerald-300" />
-        <StatCard label="Avg Loss" value={`$-${Math.abs(stats.avgLoss).toFixed(2)}`} accent="text-rose-300" />
-        <StatCard label="Best / Worst" value={`$${stats.bestTrade.toFixed(0)} / $${stats.worstTrade.toFixed(0)}`} accent="text-white" />
-      </div>
+      <motion.div variants={item} className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3">
+        <StatCard label="Net P&L" value={`$${pnlText(stats.netPnl)}`} icon={<Wallet className="w-4 h-4" />} variant={stats.netPnl >= 0 ? "success" : "danger"} />
+        <StatCard label="Win Rate" value={`${stats.winRate.toFixed(1)}%`} icon={<Target className="w-4 h-4" />} variant="accent" sub={`${stats.wins}W / ${stats.losses}L`} />
+        <StatCard label="Trades" value={stats.closedTrades} icon={<BookOpen className="w-4 h-4" />} variant="info" sub={`${stats.activeTrades} open`} />
+        <StatCard label="Profit Factor" value={isFinite(stats.profitFactor) ? stats.profitFactor.toFixed(2) : "—"} icon={<BarChart3 className="w-4 h-4" />} variant="success" />
+        <StatCard label="Expectancy" value={`$${stats.expectancy.toFixed(2)}`} icon={<Target className="w-4 h-4" />} variant={stats.expectancy >= 0 ? "success" : "danger"} />
+        <StatCard label="Avg Win" value={`$${stats.avgWin.toFixed(2)}`} icon={<Trophy className="w-4 h-4" />} variant="success" />
+        <StatCard label="Avg Loss" value={`$-${Math.abs(stats.avgLoss).toFixed(2)}`} icon={<Trophy className="w-4 h-4" />} variant="danger" />
+        <StatCard label="Best / Worst" value={`$${stats.bestTrade.toFixed(0)} / $${stats.worstTrade.toFixed(0)}`} icon={<BarChart3 className="w-4 h-4" />} variant="accent" />
+      </motion.div>
 
       {/* Form modal */}
-      {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className="panel w-full max-w-lg p-5 space-y-4 shadow-2xl">
-            <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-white">{editing ? "Edit Trade" : "Log New Trade"}</h2>
-              <button onClick={resetForm} className="text-terminal-muted hover:text-white text-lg leading-none">&times;</button>
-            </div>
+      <AnimatePresence>
+        {showForm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 modal-overlay bg-black/70 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 12 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 12 }}
+              transition={{ duration: 0.25, ease: [0.2, 0.8, 0.2, 1] }}
+              className="card wire card-elevated w-full max-w-lg p-5 space-y-4 shadow-elevated"
+            >
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-white">{editing ? "Edit Trade" : "Log New Trade"}</h2>
+                <button onClick={resetForm} className="modal-close relative text-terminal-muted hover:text-white text-lg leading-none">&times;</button>
+              </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <label className="col-span-2 block">
-                <span className="panel-title block mb-1">Instrument</span>
-                <select
-                  value={fSym}
-                  onChange={(e) => setFSym(e.target.value)}
-                  className="w-full bg-terminal-panel2 border border-terminal-border rounded px-2 py-1.5 text-sm text-white"
-                >
-                  {JOURNAL_SYMBOLS.map((s) => (
-                    <option key={s} value={s}>{s}</option>
-                  ))}
-                </select>
-              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="col-span-2 block">
+                  <span className="panel-title block mb-1">Instrument</span>
+                  <select
+                    value={fSym}
+                    onChange={(e) => setFSym(e.target.value)}
+                    className="select py-2"
+                  >
+                    {JOURNAL_SYMBOLS.map((s) => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                </label>
 
-              <label className="block">
-                <span className="panel-title block mb-1">Direction</span>
-                <div className="flex gap-1.5">
-                  {(["BUY", "SELL"] as JournalDirection[]).map((d) => (
-                    <button
-                      key={d}
-                      onClick={() => setFDir(d)}
-                      className={`badge cursor-pointer border ${fDir === d ? DIRECTION_BG[d] : "bg-terminal-panel2 border-terminal-border text-terminal-muted"}`}
-                    >
-                      {d}
-                    </button>
-                  ))}
-                </div>
-              </label>
+                <label className="block">
+                  <span className="panel-title block mb-1">Direction</span>
+                  <div className="flex gap-1.5">
+                    {(["BUY", "SELL"] as JournalDirection[]).map((d) => (
+                      <button
+                        key={d}
+                        onClick={() => setFDir(d)}
+                        className={`badge cursor-pointer border px-3 py-1 ${fDir === d ? DIRECTION_BG[d] : "bg-terminal-panel2 border-terminal-border text-terminal-muted"}`}
+                      >
+                        {d}
+                      </button>
+                    ))}
+                  </div>
+                </label>
 
-              <label className="block">
-                <span className="panel-title block mb-1">Date</span>
-                <input
-                  type="date"
-                  value={fDate}
-                  onChange={(e) => setFDate(e.target.value)}
-                  className="w-full bg-terminal-panel2 border border-terminal-border rounded px-2 py-1.5 text-sm text-white"
-                />
-              </label>
+                <label className="block">
+                  <span className="panel-title block mb-1">Date</span>
+                  <input
+                    type="date"
+                    value={fDate}
+                    onChange={(e) => setFDate(e.target.value)}
+                    className="input py-2"
+                  />
+                </label>
 
-              <label className="block">
-                <span className="panel-title block mb-1">Entry Price</span>
-                <input
-                  type="number" step="any" value={fEntry}
-                  onChange={(e) => setFEntry(e.target.value)}
-                  placeholder="e.g. 4620.5"
-                  className="w-full bg-terminal-panel2 border border-terminal-border rounded px-2 py-1.5 text-sm text-white mono"
-                />
-              </label>
+                <label className="block">
+                  <span className="panel-title block mb-1">Entry Price</span>
+                  <input
+                    type="number" step="any" value={fEntry}
+                    onChange={(e) => setFEntry(e.target.value)}
+                    placeholder="e.g. 4620.5"
+                    className="input py-2 font-mono"
+                  />
+                </label>
 
-              <label className="block">
-                <span className="panel-title block mb-1">Exit Price (blank = open)</span>
-                <input
-                  type="number" step="any" value={fExit}
-                  onChange={(e) => setFExit(e.target.value)}
-                  placeholder="e.g. 4632.0"
-                  className="w-full bg-terminal-panel2 border border-terminal-border rounded px-2 py-1.5 text-sm text-white mono"
-                />
-              </label>
+                <label className="block">
+                  <span className="panel-title block mb-1">Exit Price (blank = open)</span>
+                  <input
+                    type="number" step="any" value={fExit}
+                    onChange={(e) => setFExit(e.target.value)}
+                    placeholder="e.g. 4632.0"
+                    className="input py-2 font-mono"
+                  />
+                </label>
 
-              <label className="block">
-                <span className="panel-title block mb-1">Quantity</span>
-                <input
-                  type="number" step="any" value={fQty}
-                  onChange={(e) => setFQty(e.target.value)}
-                  placeholder="e.g. 0.1"
-                  className="w-full bg-terminal-panel2 border border-terminal-border rounded px-2 py-1.5 text-sm text-white mono"
-                />
-              </label>
+                <label className="block">
+                  <span className="panel-title block mb-1">Quantity</span>
+                  <input
+                    type="number" step="any" value={fQty}
+                    onChange={(e) => setFQty(e.target.value)}
+                    placeholder="e.g. 0.1"
+                    className="input py-2 font-mono"
+                  />
+                </label>
 
-              <label className="block">
-                <span className="panel-title block mb-1">Fees</span>
-                <input
-                  type="number" step="any" value={fFees}
-                  onChange={(e) => setFFees(e.target.value)}
-                  placeholder="0"
-                  className="w-full bg-terminal-panel2 border border-terminal-border rounded px-2 py-1.5 text-sm text-white mono"
-                />
-              </label>
+                <label className="block">
+                  <span className="panel-title block mb-1">Fees</span>
+                  <input
+                    type="number" step="any" value={fFees}
+                    onChange={(e) => setFFees(e.target.value)}
+                    placeholder="0"
+                    className="input py-2 font-mono"
+                  />
+                </label>
 
-              <label className="block">
-                <span className="panel-title block mb-1">Strategy</span>
-                <select
-                  value={fStrategy}
-                  onChange={(e) => setFStrategy(e.target.value)}
-                  className="w-full bg-terminal-panel2 border border-terminal-border rounded px-2 py-1.5 text-sm text-white"
-                >
-                  {PRESET_STRATEGIES.map((s) => (
-                    <option key={s} value={s}>{s}</option>
-                  ))}
-                </select>
-              </label>
+                <label className="block col-span-2">
+                  <span className="panel-title block mb-1">Strategy</span>
+                  <select
+                    value={fStrategy}
+                    onChange={(e) => setFStrategy(e.target.value)}
+                    className="select py-2"
+                  >
+                    {PRESET_STRATEGIES.map((s) => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                </label>
 
-              <label className="block col-span-2">
-                <span className="panel-title block mb-1">Notes</span>
-                <textarea
-                  value={fNotes}
-                  onChange={(e) => setFNotes(e.target.value)}
-                  rows={2}
-                  placeholder="Why did you take this trade? What happened?"
-                  className="w-full bg-terminal-panel2 border border-terminal-border rounded px-2 py-1.5 text-sm text-white resize-none"
-                />
-              </label>
-            </div>
+                <label className="block col-span-2">
+                  <span className="panel-title block mb-1">Notes</span>
+                  <textarea
+                    value={fNotes}
+                    onChange={(e) => setFNotes(e.target.value)}
+                    rows={2}
+                    placeholder="Why did you take this trade? What happened?"
+                    className="input py-2 resize-none"
+                  />
+                </label>
+              </div>
 
-            <div className="flex gap-2 justify-end">
-              <button onClick={resetForm} className="btn btn-ghost">Cancel</button>
-              <button onClick={submit} className="btn btn-primary">{editing ? "Save Changes" : "Log Trade"}</button>
-            </div>
-          </div>
-        </div>
-      )}
+              <div className="flex gap-2 justify-end">
+                <button onClick={resetForm} className="btn btn-ghost">Cancel</button>
+                <button onClick={submit} className="btn btn-primary">{editing ? "Save Changes" : "Log Trade"}</button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Calendar / list */}
       {view === "calendar" ? (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div className="panel p-4 lg:col-span-2">
+        <motion.div variants={item} className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+          <div className="card p-4 lg:col-span-2 panel-hover">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
-                <button onClick={() => { const d = new Date(cursor); setCursor(new Date(d.getFullYear(), d.getMonth() - 1, 1).getTime()); }} className="btn btn-ghost px-2">‹</button>
+                <button onClick={() => { const d = new Date(cursor); setCursor(new Date(d.getFullYear(), d.getMonth() - 1, 1).getTime()); }} className="btn btn-ghost btn-icon w-8 h-8 px-0">‹</button>
                 <span className="text-sm font-semibold text-white">{MONTHS[month]} {year}</span>
-                <button onClick={() => { const d = new Date(cursor); setCursor(new Date(d.getFullYear(), d.getMonth() + 1, 1).getTime()); }} className="btn btn-ghost px-2">›</button>
+                <button onClick={() => { const d = new Date(cursor); setCursor(new Date(d.getFullYear(), d.getMonth() + 1, 1).getTime()); }} className="btn btn-ghost btn-icon w-8 h-8 px-0">›</button>
               </div>
-              <button onClick={() => { const d = new Date(); setCursor(new Date(d.getFullYear(), d.getMonth(), 1).getTime()); }} className="btn btn-ghost text-xs">Today</button>
+              <button onClick={() => { const d = new Date(); setCursor(new Date(d.getFullYear(), d.getMonth(), 1).getTime()); }} className="btn btn-ghost btn-sm">Today</button>
             </div>
             <div className="grid grid-cols-7 gap-1 text-center text-[10px] text-terminal-muted uppercase mb-1">
               {WEEKDAYS.map((w) => <div key={w} className="py-1">{w}</div>)}
@@ -387,8 +427,10 @@ export default function JournalPage() {
                   <button
                     key={key}
                     onClick={() => openForm(ts)}
-                    className={`min-h-[64px] rounded border p-1 text-left flex flex-col gap-1 transition-colors ${
-                      isToday ? "border-sky-500/60 bg-sky-500/10" : "border-terminal-border bg-terminal-panel2 hover:border-sky-500/40"
+                    className={`min-h-[64px] rounded-lg border p-1 text-left flex flex-col gap-1 transition-all duration-200 ${
+                      isToday
+                        ? "border-terminal-accent/60 bg-terminal-accent/10 shadow-[0_0_16px_rgba(34,211,238,0.15)]"
+                        : "border-terminal-border bg-terminal-panel2/70 hover:border-terminal-accent/40 hover:bg-terminal-panel2"
                     }`}
                   >
                     <span className="text-[11px] font-semibold text-terminal-muted">{day}</span>
@@ -399,7 +441,7 @@ export default function JournalPage() {
                     ))}
                     {dayTrades.length > 2 && <span className="text-[9px] text-terminal-muted">+{dayTrades.length - 2} more</span>}
                     {pnl != null && (
-                      <span className={`text-[11px] mono font-semibold mt-auto ${pnl >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                      <span className={`text-[11px] font-mono font-semibold mt-auto ${pnl >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
                         {pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}
                       </span>
                     )}
@@ -409,102 +451,101 @@ export default function JournalPage() {
             </div>
           </div>
 
-          <div className="space-y-3">
-            <div className="panel p-4">
+          <div className="space-y-4">
+            <div className="card p-4 panel-hover">
               <div className="panel-title mb-2">Month Performance</div>
               <div className="text-sm">
-                <div className="flex justify-between py-1"><span className="text-terminal-muted">Net P&L</span><span className={`mono font-semibold ${monthPnl(monthTrades) >= 0 ? "text-emerald-400" : "text-rose-400"}`}>{pnlText(monthPnl(monthTrades))}</span></div>
-                <div className="flex justify-between py-1"><span className="text-terminal-muted">Closed</span><span className="mono">{monthTrades.filter((t) => t.outcome !== "OPEN").length}</span></div>
-                <div className="flex justify-between py-1"><span className="text-terminal-muted">Wins</span><span className="mono text-emerald-400">{monthTrades.filter((t) => t.outcome === "WIN").length}</span></div>
-                <div className="flex justify-between py-1"><span className="text-terminal-muted">Losses</span><span className="mono text-rose-400">{monthTrades.filter((t) => t.outcome === "LOSS").length}</span></div>
+                <div className="flex justify-between py-1"><span className="text-terminal-muted">Net P&L</span><span className={`font-mono font-semibold ${monthPnl(monthTrades) >= 0 ? "text-emerald-400" : "text-rose-400"}`}>{pnlText(monthPnl(monthTrades))}</span></div>
+                <div className="flex justify-between py-1"><span className="text-terminal-muted">Closed</span><span className="font-mono">{monthTrades.filter((t) => t.outcome !== "OPEN").length}</span></div>
+                <div className="flex justify-between py-1"><span className="text-terminal-muted">Wins</span><span className="font-mono text-emerald-400">{monthTrades.filter((t) => t.outcome === "WIN").length}</span></div>
+                <div className="flex justify-between py-1"><span className="text-terminal-muted">Losses</span><span className="font-mono text-rose-400">{monthTrades.filter((t) => t.outcome === "LOSS").length}</span></div>
               </div>
             </div>
 
-            <div className="panel p-4">
+            <div className="card p-4 panel-hover">
               <div className="panel-title mb-2">Best Performing Symbols</div>
               <div className="space-y-1.5">
-                {stats.byOutcome.slice(0, 5).map((s) => (
-                  <div key={s.symbol} className="flex items-center justify-between text-xs">
-                    <span className="text-white font-medium">{s.symbol}</span>
-                    <span className="flex items-center gap-2">
-                      <span className="text-terminal-muted">{s.wins}W/{s.losses}L</span>
-                      <span className={`mono ${s.pnl >= 0 ? "text-emerald-400" : "text-rose-400"}`}>{pnlText(s.pnl)}</span>
-                    </span>
-                  </div>
-                ))}
+                {stats.byOutcome.slice(0, 5).map((s) => {
+                  const total = s.wins + s.losses;
+                  const wr = total ? Math.round((s.wins / total) * 100) : 0;
+                  return (
+                    <div key={s.symbol} className="flex items-center justify-between text-xs">
+                      <span className="text-terminal-text font-medium">{s.symbol}</span>
+                      <span className="flex items-center gap-2">
+                        <span className="font-mono text-[10px] text-terminal-muted w-8 text-right">{wr}%</span>
+                        <span className="text-terminal-muted">{s.wins}W/{s.losses}L</span>
+                        <span className={`font-mono ${s.pnl >= 0 ? "text-emerald-400" : "text-rose-400"}`}>{pnlText(s.pnl)}</span>
+                      </span>
+                    </div>
+                  );
+                })}
                 {stats.byOutcome.length === 0 && <div className="text-xs text-terminal-muted">No closed trades yet.</div>}
               </div>
             </div>
           </div>
-        </div>
+        </motion.div>
       ) : (
-        <div className="panel overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="text-left text-terminal-muted uppercase text-[10px] border-b border-terminal-border">
-                <th className="p-2">Date</th>
-                <th className="p-2">Symbol</th>
-                <th className="p-2">Dir</th>
-                <th className="p-2">Entry</th>
-                <th className="p-2">Exit</th>
-                <th className="p-2">Qty</th>
-                <th className="p-2">P&L</th>
-                <th className="p-2">Outcome</th>
-                <th className="p-2">Strategy</th>
-                <th className="p-2">Notes</th>
-                <th className="p-2"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {[...trades].sort((a, b) => b.openedAt - a.openedAt).map((t) => (
-                <tr key={t.id} className="border-b border-terminal-panel2 hover:bg-terminal-panel2/50 align-top">
-                  <td className="p-2 text-terminal-muted">{new Date(t.openedAt).toLocaleDateString("en-GB")}</td>
-                  <td className="p-2 font-semibold text-white">{t.symbol}</td>
-                  <td className="p-2"><span className={`badge ${DIRECTION_BG[t.direction]}`}>{t.direction}</span></td>
-                  <td className="p-2 mono">{formatPrice(t.entry, decimalsFor(t.symbol))}</td>
-                  <td className="p-2 mono">{t.exit != null ? formatPrice(t.exit, decimalsFor(t.symbol)) : <span className="text-terminal-muted">—</span>}</td>
-                  <td className="p-2 mono">{t.quantity}</td>
-                  <td className={`p-2 mono font-semibold ${t.pnl == null ? "text-terminal-muted" : t.pnl >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
-                    {t.pnl == null ? "—" : pnlText(t.pnl)}
-                  </td>
-                  <td className="p-2">
-                    <span className={`badge ${
-                      t.outcome === "WIN" ? "bg-emerald-500/15 text-emerald-400" :
-                      t.outcome === "LOSS" ? "bg-rose-500/15 text-rose-400" :
-                      t.outcome === "BREAKEVEN" ? "bg-slate-500/15 text-slate-300" :
-                      "bg-sky-500/15 text-sky-300"
-                    }`}>{t.outcome}</span>
-                  </td>
-                  <td className="p-2 text-terminal-muted">{t.strategy}</td>
-                  <td className="p-2 text-terminal-muted max-w-[200px] truncate">{t.notes || "—"}</td>
-                  <td className="p-2">
-                    <div className="flex gap-1">
-                      <button onClick={() => openEdit(t)} className="btn btn-ghost px-1.5 py-0.5 text-[10px]">Edit</button>
-                      <button onClick={() => remove(t.id)} className="btn btn-ghost px-1.5 py-0.5 text-[10px] text-rose-400">Del</button>
-                    </div>
-                  </td>
+        <motion.div variants={item} className="card overflow-hidden panel-hover">
+          <div className="overflow-x-auto">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Symbol</th>
+                  <th>Dir</th>
+                  <th>Entry</th>
+                  <th>Exit</th>
+                  <th>Qty</th>
+                  <th>P&L</th>
+                  <th>Outcome</th>
+                  <th>Strategy</th>
+                  <th>Notes</th>
+                  <th></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {[...trades].sort((a, b) => b.openedAt - a.openedAt).map((t) => (
+                  <tr key={t.id}>
+                    <td className="text-terminal-muted">{new Date(t.openedAt).toLocaleDateString("en-GB")}</td>
+                    <td className="font-semibold text-terminal-text">{t.symbol}</td>
+                    <td><span className={`badge ${DIRECTION_BG[t.direction]}`}>{t.direction}</span></td>
+                    <td className="font-mono">{formatPrice(t.entry, decimalsFor(t.symbol))}</td>
+                    <td className="font-mono">{t.exit != null ? formatPrice(t.exit, decimalsFor(t.symbol)) : <span className="text-terminal-muted">—</span>}</td>
+                    <td className="font-mono">{t.quantity}</td>
+                    <td className={`font-mono font-semibold ${t.pnl == null ? "text-terminal-muted" : t.pnl >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                      {t.pnl == null ? "—" : pnlText(t.pnl)}
+                    </td>
+                    <td>
+                      <span className={`badge ${
+                        t.outcome === "WIN" ? "badge-success" :
+                        t.outcome === "LOSS" ? "badge-danger" :
+                        t.outcome === "BREAKEVEN" ? "badge-neutral" :
+                        "badge-info"
+                      }`}>{t.outcome}</span>
+                    </td>
+                    <td className="text-terminal-muted">{t.strategy}</td>
+                    <td className="text-terminal-muted max-w-[200px] truncate">{t.notes || "—"}</td>
+                    <td>
+                      <div className="flex gap-1">
+                        <button onClick={() => openEdit(t)} className="btn btn-ghost btn-sm px-2 py-1">Edit</button>
+                        <button onClick={() => remove(t.id)} className="btn btn-ghost btn-sm px-2 py-1 text-rose-400">Del</button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
           {trades.length === 0 && (
-            <div className="p-10 text-center text-sm text-terminal-muted">
-              No trades logged yet. Click &ldquo;+ Log Trade&rdquo; to record your first trade.
+            <div className="empty-state">
+              <div className="empty-icon">◈</div>
+              <div className="empty-title">No trades logged yet</div>
+              <div className="empty-desc">Click &ldquo;Log Trade&rdquo; to record your first trade.</div>
             </div>
           )}
-        </div>
+        </motion.div>
       )}
-    </div>
-  );
-}
-
-function StatCard({ label, value, accent, sub }: { label: string; value: string; accent: string; sub?: string }) {
-  return (
-    <div className="panel p-3">
-      <div className="panel-title mb-1">{label}</div>
-      <div className={`text-sm font-bold mono ${accent}`}>{value}</div>
-      {sub && <div className="text-[10px] text-terminal-muted mt-0.5">{sub}</div>}
-    </div>
+    </motion.div>
   );
 }
 

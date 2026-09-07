@@ -3,7 +3,9 @@ import { useMarketState } from "@/lib/hooks/use-market-store";
 import { useMemo } from "react";
 import { loadJournal } from "@/lib/engine/journal";
 import { pipsGained, pipSizeFor } from "@/lib/engine/pips";
-import { HistoryEntry } from "@/lib/engine/history";
+import { StatCard, PageHeader } from "@/components/ui";
+import { motion } from "framer-motion";
+import { BarChart3, PieChart, Target, Activity, Wallet, AlertTriangle } from "lucide-react";
 
 type SignalTypeKey = "BUY LIMIT" | "SELL LIMIT" | "MARKET BUY" | "MARKET SELL" | "SWING BUY" | "SWING SELL" | "OTHER";
 
@@ -22,6 +24,16 @@ interface PairStat {
   buyWins: number; buyLosses: number; sellWins: number; sellLosses: number;
   buyPips: number; sellPips: number; totalPips: number; trades: number;
 }
+
+const container = {
+  hidden: { opacity: 0 },
+  visible: { opacity: 1, transition: { staggerChildren: 0.07 } },
+};
+
+const item = {
+  hidden: { opacity: 0, y: 16 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: [0.2, 0.8, 0.2, 1] as const } },
+};
 
 export default function AnalyticsPage() {
   const state = useMarketState();
@@ -48,7 +60,6 @@ export default function AnalyticsPage() {
       bySetup[h.setupName] = (bySetup[h.setupName] ?? 0) + 1;
     }
 
-    // Win rate by SIGNAL TYPE (buy limit / sell limit / market buy / market sell …)
     const byType: Record<SignalTypeKey, TypeStat> = Object.fromEntries(
       TYPE_KEYS.map((k) => [k, { wins: 0, losses: 0, winRate: 0 }])
     ) as Record<SignalTypeKey, TypeStat>;
@@ -66,7 +77,6 @@ export default function AnalyticsPage() {
     return { total: history.length, won, lost, winRate, avgRR, avgScore, byAsset, bySession, bySetup, byType };
   }, [history]);
 
-  // PER-PAIR breakdown from the manual journal (exact pips + per-direction wins)
   const pairStats = useMemo<PairStat[]>(() => {
     const trades = loadJournal().filter((t) => t.outcome !== "OPEN" && t.exit != null);
     const map = new Map<string, PairStat>();
@@ -96,64 +106,104 @@ export default function AnalyticsPage() {
   const bar = (v: number, max: number) => Math.max(4, Math.round((v / max) * 100));
 
   return (
-    <div className="space-y-4">
-      <div className="panel p-3 border-amber-500/40 bg-amber-500/5 text-xs text-amber-300">
-        All figures below are <span className="font-bold">SIMULATION / RECORDED</span> from demo data and your trade journal. Win-rates are historical estimates, not predictions or guarantees.
-      </div>
+    <motion.div className="space-y-6" variants={container} initial="hidden" animate="visible">
+      <motion.div variants={item}>
+        <PageHeader
+          eyebrow="PERFORMANCE LAB"
+          eyebrowIcon={<BarChart3 className="w-3.5 h-3.5" />}
+          title="Analytics"
+          highlight="& Performance"
+          description="Win rates, expectancy and pair-level breakdowns computed from recorded signals and your manual trade journal."
+          right={
+            <div className="inline-flex items-center gap-2 bg-amber-500/10 border border-amber-500/30 rounded-xl px-3 py-1.5 text-caption text-amber-300">
+              <AlertTriangle className="w-3.5 h-3.5" /> Simulated / recorded data
+            </div>
+          }
+        />
+      </motion.div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-        <Stat label="Total Signals" value={stats.total} />
-        <Stat label="Winning Signals" value={stats.won} color="text-emerald-400" />
-        <Stat label="Losing Signals" value={stats.lost} color="text-rose-400" />
-        <Stat label="Win Rate" value={`${stats.winRate}%`} color="text-sky-300" />
-        <Stat label="Average R:R" value={`1:${stats.avgRR.toFixed(1)}`} />
-        <Stat label="Avg Signal Score" value={stats.avgScore} color="text-sky-300" />
-      </div>
+      {/* Stats strip */}
+      <motion.div variants={item} className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+        <StatCard label="Total Signals" value={stats.total} icon={<BarChart3 className="w-5 h-5" />} variant="accent" />
+        <StatCard label="Winning" value={stats.won} icon={<Target className="w-5 h-5" />} variant="success" sub={`${stats.lost} losing`} />
+        <StatCard label="Win Rate" value={`${stats.winRate}%`} icon={<PieChart className="w-5 h-5" />} variant="info" />
+        <StatCard label="Avg R:R" value={`1:${stats.avgRR.toFixed(1)}`} icon={<Activity className="w-5 h-5" />} variant="warning" />
+        <StatCard label="Avg Score" value={stats.avgScore} unit="/100" icon={<Target className="w-5 h-5" />} variant="info" />
+        <StatCard label="Journal Pairs" value={pairStats.length} icon={<Wallet className="w-5 h-5" />} variant="accent" sub="from your journal" />
+      </motion.div>
 
-      <div className="panel p-4">
-        <div className="panel-title mb-2">WIN RATE BY SIGNAL TYPE</div>
+      {/* Win rate by signal type */}
+      <motion.div variants={item} className="card p-5 panel-hover">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="panel-title">WIN RATE BY SIGNAL TYPE</h2>
+            <p className="text-caption-xs text-terminal-muted mt-0.5">Settled signals grouped by entry style</p>
+          </div>
+          <PieChart className="w-4 h-4 text-terminal-accent" />
+        </div>
         {TYPE_KEYS.every((k) => stats.byType[k].wins + stats.byType[k].losses === 0) ? (
-          <div className="text-xs text-terminal-muted">No settled signals yet. New signals appear here as they resolve to TP/SL.</div>
+          <div className="empty-state py-8">
+            <div className="empty-desc">No settled signals yet. New signals appear here as they resolve to TP/SL.</div>
+          </div>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-7 gap-3">
             {TYPE_KEYS.map((k) => {
               const t = stats.byType[k];
               const n = t.wins + t.losses;
               if (n === 0) return null;
+              const up = t.winRate >= 50;
               return (
-                <div key={k} className="rounded border border-terminal-border bg-terminal-panel p-3">
-                  <div className="text-xs text-terminal-muted">{k}</div>
-                  <div className={`text-xl font-bold mt-1 ${t.winRate >= 50 ? "text-emerald-400" : "text-rose-400"}`}>{t.winRate}%</div>
-                  <div className="text-[11px] text-terminal-muted">
-                    {t.wins}W / {t.losses}L · {n} trades
+                <div key={k} className="panel-section p-3 relative overflow-hidden">
+                  <div className="text-caption-xs font-semibold text-terminal-muted">{k.replace(" ", "\u00A0")}</div>
+                  <div className={`text-xl font-bold font-mono mt-1 ${up ? "text-emerald-400" : "text-rose-400"}`}>
+                    {t.winRate}%
                   </div>
-                  <div className="mt-2 h-1.5 bg-terminal-panel2 rounded overflow-hidden">
-                    <div className={t.winRate >= 50 ? "bg-emerald-400" : "bg-rose-400"} style={{ width: `${t.winRate}%`, height: "100%" }} />
+                  <div className="text-[11px] text-terminal-muted mt-0.5">{t.wins}W / {t.losses}L</div>
+                  <div className="mt-2 progress-bar h-1.5">
+                    <div
+                      className="h-full rounded-full transition-all duration-700"
+                      style={{
+                        width: `${Math.max(4, t.winRate)}%`,
+                        background: up
+                          ? "linear-gradient(90deg,#089981,#22c55e)"
+                          : "linear-gradient(90deg,#f23645,#f87171)",
+                        boxShadow: up ? "0 0 10px rgba(8,153,129,0.5)" : "0 0 10px rgba(242,54,69,0.5)",
+                      }}
+                    />
                   </div>
                 </div>
               );
             })}
           </div>
         )}
-      </div>
+      </motion.div>
 
-      <div className="panel p-4">
-        <div className="panel-title mb-2">PER-PAIR BREAKDOWN <span className="text-[10px] text-terminal-muted normal-case ml-1">(manual journal — wins, pips gained, win rate)</span></div>
+      {/* Per-pair breakdown */}
+      <motion.div variants={item} className="card p-5 panel-hover">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="panel-title">PER-PAIR BREAKDOWN</h2>
+            <p className="text-caption-xs text-terminal-muted mt-0.5">Manual journal — wins, pips gained, win rate by pair &amp; direction</p>
+          </div>
+          <Wallet className="w-4 h-4 text-terminal-accent" />
+        </div>
         {pairStats.length === 0 ? (
-          <div className="text-xs text-terminal-muted">No logged trades yet. Trades you log in the Journal will show up here with exact pips per pair &amp; direction.</div>
+          <div className="empty-state py-8">
+            <div className="empty-desc">No logged trades yet. Trades you log in the Journal will show up with exact pips per pair &amp; direction.</div>
+          </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-xs">
+            <table className="table">
               <thead>
-                <tr className="text-left text-terminal-muted">
-                  <th className="p-2">Pair</th>
-                  <th className="p-2">Buy W/L</th>
-                  <th className="p-2">Buy Pips</th>
-                  <th className="p-2">Sell W/L</th>
-                  <th className="p-2">Sell Pips</th>
-                  <th className="p-2">Total Pips</th>
-                  <th className="p-2">Trades</th>
-                  <th className="p-2">Win Rate</th>
+                <tr>
+                  <th>Pair</th>
+                  <th>Buy W/L</th>
+                  <th>Buy Pips</th>
+                  <th>Sell W/L</th>
+                  <th>Sell Pips</th>
+                  <th>Total Pips</th>
+                  <th>Trades</th>
+                  <th>Win Rate</th>
                 </tr>
               </thead>
               <tbody>
@@ -162,25 +212,38 @@ export default function AnalyticsPage() {
                   const wins = p.buyWins + p.sellWins;
                   const wr = total ? Math.round((wins / total) * 100) : 0;
                   return (
-                    <tr key={p.symbol} className="border-t border-terminal-border">
-                      <td className="p-2 font-semibold text-white">{p.symbol}</td>
-                      <td className="p-2">
+                    <tr key={p.symbol}>
+                      <td className="font-semibold text-terminal-text">{p.symbol}</td>
+                      <td>
                         <span className="text-emerald-400">{p.buyWins}W</span> / <span className="text-rose-400">{p.buyLosses}L</span>
                       </td>
-                      <td className={`p-2 font-mono ${p.buyPips > 0 ? "text-emerald-400" : p.buyPips < 0 ? "text-rose-400" : "text-terminal-muted"}`}>
+                      <td className={`font-mono ${p.buyPips > 0 ? "text-emerald-400" : p.buyPips < 0 ? "text-rose-400" : "text-terminal-muted"}`}>
                         {p.buyPips > 0 ? "+" : ""}{p.buyPips.toFixed(1)}
                       </td>
-                      <td className="p-2">
+                      <td>
                         <span className="text-emerald-400">{p.sellWins}W</span> / <span className="text-rose-400">{p.sellLosses}L</span>
                       </td>
-                      <td className={`p-2 font-mono ${p.sellPips > 0 ? "text-emerald-400" : p.sellPips < 0 ? "text-rose-400" : "text-terminal-muted"}`}>
+                      <td className={`font-mono ${p.sellPips > 0 ? "text-emerald-400" : p.sellPips < 0 ? "text-rose-400" : "text-terminal-muted"}`}>
                         {p.sellPips > 0 ? "+" : ""}{p.sellPips.toFixed(1)}
                       </td>
-                      <td className={`p-2 font-mono font-semibold ${p.totalPips > 0 ? "text-emerald-400" : p.totalPips < 0 ? "text-rose-400" : "text-terminal-muted"}`}>
+                      <td className={`font-mono font-semibold ${p.totalPips > 0 ? "text-emerald-400" : p.totalPips < 0 ? "text-rose-400" : "text-terminal-muted"}`}>
                         {p.totalPips > 0 ? "+" : ""}{p.totalPips.toFixed(1)}p
                       </td>
-                      <td className="p-2 text-terminal-muted">{total}</td>
-                      <td className="p-2 font-semibold text-sky-300">{wr}%</td>
+                      <td className="text-terminal-muted">{total}</td>
+                      <td>
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-sky-300 font-mono">{wr}%</span>
+                          <div className="strength-bar w-16 hidden xl:inline-block">
+                            <div
+                              className="h-full rounded-full"
+                              style={{
+                                width: `${wr}%`,
+                                background: wr >= 50 ? "linear-gradient(90deg,#089981,#22c55e)" : "linear-gradient(90deg,#f23645,#f87171)",
+                              }}
+                            />
+                          </div>
+                        </div>
+                      </td>
                     </tr>
                   );
                 })}
@@ -188,43 +251,45 @@ export default function AnalyticsPage() {
             </table>
           </div>
         )}
-      </div>
+      </motion.div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <BarChart label="Signals by Asset" data={stats.byAsset} bar={bar} />
-        <BarChart label="Signals by Session" data={stats.bySession} bar={bar} />
-        <BarChart label="Signals by Setup Type" data={stats.bySetup} bar={bar} />
-      </div>
-    </div>
+      {/* Bar charts */}
+      <motion.div variants={item} className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <BarChart label="Signals by Asset" icon={<PieChart className="w-3.5 h-3.5" />} data={stats.byAsset} bar={bar} />
+        <BarChart label="Signals by Session" icon={<Activity className="w-3.5 h-3.5" />} data={stats.bySession} bar={bar} />
+        <BarChart label="Signals by Setup" icon={<Target className="w-3.5 h-3.5" />} data={stats.bySetup} bar={bar} />
+      </motion.div>
+    </motion.div>
   );
 }
 
-function Stat({ label, value, color = "text-white" }: { label: string; value: string | number; color?: string }) {
-  return (
-    <div className="panel p-4">
-      <div className="panel-title">{label.toUpperCase()}</div>
-      <div className={`text-2xl font-bold mt-1 ${color}`}>{value}</div>
-    </div>
-  );
-}
-
-function BarChart({ label, data, bar }: { label: string; data: Record<string, number>; bar: (v: number, max: number) => number }) {
+function BarChart({ label, icon, data, bar }: { label: string; icon: React.ReactNode; data: Record<string, number>; bar: (v: number, max: number) => number }) {
   const entries = Object.entries(data).sort((a, b) => b[1] - a[1]).slice(0, 10);
   const max = Math.max(1, ...entries.map(([, v]) => v));
   return (
-    <div className="panel p-4">
-      <div className="panel-title mb-2">{label.toUpperCase()}</div>
+    <div className="card p-5 panel-hover">
+      <div className="flex items-center gap-2 mb-4">
+        <span className="text-terminal-accent">{icon}</span>
+        <h2 className="panel-title">{label.toUpperCase()}</h2>
+      </div>
       {entries.length === 0 ? (
-        <div className="text-xs text-terminal-muted">No data yet.</div>
+        <div className="text-xs text-terminal-muted py-6 text-center">No data yet.</div>
       ) : (
-        <div className="space-y-1.5">
+        <div className="space-y-2">
           {entries.map(([k, v]) => (
             <div key={k} className="flex items-center gap-2 text-xs">
               <span className="w-16 truncate text-terminal-muted">{k}</span>
-              <div className="flex-1 h-2 bg-terminal-panel2 rounded overflow-hidden">
-                <div className="h-full bg-sky-500" style={{ width: `${bar(v, max)}%` }} />
+              <div className="flex-1 h-2 bg-terminal-panel2 rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full"
+                  style={{
+                    width: `${bar(v, max)}%`,
+                    background: "linear-gradient(90deg,#22d3ee,#818cf8)",
+                    boxShadow: "0 0 8px rgba(34,211,238,0.3)",
+                  }}
+                />
               </div>
-              <span className="w-6 text-right font-mono text-white">{v}</span>
+              <span className="w-6 text-right font-mono text-terminal-text">{v}</span>
             </div>
           ))}
         </div>

@@ -4,6 +4,7 @@ export * from "./Card";
 export * from "./StatCard";
 export * from "./LiveIndicator";
 export * from "./LiveValue";
+export * from "./PageHeader";
 export * from "./SignalGrid";
 export * from "./LoadingState";
 export * from "./ErrorState";

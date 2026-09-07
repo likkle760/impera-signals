@@ -5,7 +5,7 @@ import { decimalsFor } from "@/lib/formatting";
 import SignalCard from "@/components/SignalCard";
 import { formatTime } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
-import { Zap, Signal, Activity, Filter, Send } from "lucide-react";
+import { Zap, Signal, Activity, Filter, Send, Search } from "lucide-react";
 import { StatCard } from "@/components/ui";
 import { TelegramCta } from "@/components/TelegramCta";
 
@@ -36,13 +36,22 @@ const item = {
 export default function SignalsPage() {
   const state = useMarketState();
   const [filter, setFilter] = useState("All");
+  const [status, setStatus] = useState("All");
+  const [q, setQ] = useState("");
 
   const allSignals = state.snapshot.signals;
+  const statuses = useMemo(
+    () => ["All", ...Array.from(new Set(allSignals.map((s) => s.status)))],
+    [allSignals]
+  );
+
   const signals = useMemo(() => {
     let s = [...allSignals];
     if (filter !== "All") s = s.filter((x) => x.type === filter);
+    if (status !== "All") s = s.filter((x) => x.status === status);
+    if (q) s = s.filter((x) => x.symbol.toLowerCase().includes(q.toLowerCase()));
     return s.sort((a, b) => b.confidence - a.confidence);
-  }, [allSignals, filter]);
+  }, [allSignals, filter, status, q]);
 
   const active = allSignals.filter((x) => x.status === "ACTIVE" || x.status === "TRIGGERED");
   const avgConfidence = allSignals.length
@@ -89,6 +98,33 @@ export default function SignalsPage() {
       </motion.div>
 
       {/* Filters */}
+      <motion.div variants={item} className="flex flex-wrap gap-2 items-center">
+        <div className="relative">
+          <Search className="w-4 h-4 text-terminal-muted absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search symbol…"
+            className="input w-44 py-2 pl-9"
+          />
+        </div>
+        {statuses.length > 1 && (
+          <>
+            <div className="h-6 w-px bg-terminal-border/70 mx-1 hidden sm:block" />
+            {statuses.map((st) => (
+              <button
+                key={st}
+                onClick={() => setStatus(st)}
+                className={`filter-chip ${status === st ? "filter-chip-active" : ""}`}
+              >
+                {st}
+              </button>
+            ))}
+          </>
+        )}
+      </motion.div>
+
+      {/* Type filters */}
       <motion.div variants={item} className="flex flex-wrap gap-2 items-center">
         <span className="flex items-center gap-1.5 text-caption uppercase tracking-wider text-terminal-muted mr-1">
           <Filter className="w-3.5 h-3.5" /> Type
