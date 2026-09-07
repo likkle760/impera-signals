@@ -79,10 +79,12 @@ export default function DashboardPage() {
       animate="visible"
     >
       {/* ============ HERO BANNER ============ */}
-      <MotionDiv variants={item} className="relative overflow-hidden rounded-3xl panel border-terminal-border/50 p-6 sm:p-8 lg:p-10">
+      <MotionDiv variants={item} className="relative overflow-hidden rounded-3xl card-elevated p-6 sm:p-8 lg:p-10">
+        {/* Aurora backdrop */}
         <div className="absolute inset-0 hero-grid" />
-        <div className="absolute top-0 right-0 w-96 h-96 rounded-full bg-terminal-accent/10 blur-3xl opacity-50" />
-        <div className="absolute bottom-0 left-0 w-72 h-72 rounded-full bg-terminal-violet/10 blur-3xl opacity-50" />
+        <div className="orb w-72 h-72 bg-terminal-accent/15 -top-20 right-0" />
+        <div className="orb orb-slow w-64 h-64 bg-terminal-violet/15 bottom-0 left-1/4" />
+        <div className="absolute top-0 left-[12%] right-[12%] h-px bg-gradient-to-r from-transparent via-terminal-accent/50 to-transparent" />
 
         <div className="relative z-10">
           <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6">
@@ -94,7 +96,7 @@ export default function DashboardPage() {
               <h1 className="font-display font-bold tracking-tight text-display-lg lg:text-display-xl text-terminal-text leading-tight">
                 Professional SMC/ICT
                 <br />
-                <span className="gradient-text">Signal Terminal</span>
+                <span className="aurora-text">Signal Terminal</span>
               </h1>
               <p className="text-body-lg text-terminal-muted mt-4 max-w-xl">
                 Institutional-grade Smart Money Concepts analysis with live OANDA data,
@@ -111,11 +113,12 @@ export default function DashboardPage() {
             </div>
 
             {/* Live System Status */}
-            <div className="card-elevated p-5 sm:p-6 lg:w-[320px] flex-shrink-0">
-              <div className="flex items-center justify-between mb-5">
+            <div className="relative overflow-hidden card-elevated p-5 sm:p-6 lg:w-[320px] flex-shrink-0">
+              <div className="absolute -top-16 -right-16 w-40 h-40 rounded-full bg-terminal-accent/10 blur-3xl" />
+              <div className="relative flex items-center justify-between mb-5">
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-xl bg-terminal-accentBg border border-terminal-accent/30 flex items-center justify-center">
-                    <span className="font-mono font-bold text-terminal-accent text-lg">◈</span>
+                  <div className="relative w-12 h-12 rounded-xl bg-gradient-to-br from-terminal-accent via-sky-500 to-terminal-violet flex items-center justify-center shadow-aurora">
+                    <span className="font-mono font-bold text-terminal-ink text-lg">◈</span>
                   </div>
                   <div>
                     <p className="text-caption uppercase tracking-wider text-terminal-muted">System Status</p>
@@ -124,7 +127,7 @@ export default function DashboardPage() {
                 </div>
                 <span className="badge badge-success badge-dot badge-dot-live">LIVE</span>
               </div>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="relative grid grid-cols-3 gap-3">
                 <div className="text-center">
                   <p className="font-mono text-2xl font-bold text-terminal-text">{scanned}</p>
                   <p className="text-caption text-terminal-muted">Markets</p>
@@ -134,9 +137,17 @@ export default function DashboardPage() {
                   <p className="text-caption text-terminal-muted">Active</p>
                 </div>
                 <div className="text-center border-l border-terminal-border/50">
-                  <p className="font-mono text-2xl font-bold text-terminal-accent">{topByScore.length}</p>
+                  <p className="font-mono text-2xl font-bold aurora-text">{topByScore.length}</p>
                   <p className="text-caption text-terminal-muted">Top</p>
                 </div>
+              </div>
+              <div className="hairline mt-5 mb-3" />
+              <div className="relative flex items-center justify-between text-caption">
+                <span className="text-terminal-muted">Engine</span>
+                <span className="flex items-center gap-1.5 text-terminal-accent">
+                  <span className="w-1.5 h-1.5 rounded-full bg-terminal-accent animate-pulse-live" />
+                  Multi-TF scanning
+                </span>
               </div>
             </div>
           </div>

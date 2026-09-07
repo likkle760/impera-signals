@@ -90,14 +90,15 @@ export function MobileNavigation({
               exit={{ x: -320 }}
               transition={{ type: "spring", stiffness: 380, damping: 35 }}
             >
-              <div className="flex items-center justify-between px-5 h-16 border-b border-terminal-border">
+              <div className="flex items-center justify-between px-5 h-16 border-b border-terminal-border/60">
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-terminal-accentBg border border-terminal-accent/30 flex items-center justify-center">
-                    <span className="font-mono font-bold text-terminal-accent text-base">◈</span>
+                  <div className="relative w-9 h-9 rounded-xl bg-gradient-to-br from-terminal-accent via-sky-500 to-terminal-violet flex items-center justify-center shadow-aurora">
+                    <span className="font-mono font-bold text-terminal-ink text-base leading-none">◈</span>
+                    <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-terminal-bull ring-2 ring-terminal-ink animate-pulse-live" />
                   </div>
                   <div>
-                    <p className="font-display font-bold tracking-tight text-terminal-text text-sm">
-                      IMPERA <span className="text-terminal-accent">SIGNALS</span>
+                    <p className="font-display font-bold tracking-tight text-terminal-text text-sm leading-tight">
+                      IMPERA <span className="aurora-text">SIGNALS</span>
                     </p>
                     <p className="text-caption text-terminal-muted">Institutional SMC Terminal</p>
                   </div>

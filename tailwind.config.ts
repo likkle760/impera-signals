@@ -9,6 +9,7 @@ const config: Config = {
       colors: {
         // Premium dark trading terminal palette
         terminal: {
+          ink: "#020617",         // Deepest layer - main backdrop
           bg: "#030712",           // Deep navy - main background
           bgElevated: "#0b1324",   // Slightly elevated surfaces
           panel: "#0f172a",        // Card/panel backgrounds
@@ -81,12 +82,19 @@ const config: Config = {
         "card-hover": "0 8px 30px rgba(0,0,0,0.4), 0 0 0 1px rgba(34, 211, 228, 0.15)",
         "elevated": "0 20px 50px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.03)",
         "inner-glow": "inset 0 1px 0 rgba(255,255,255,0.05)",
+        "aurora": "0 0 30px rgba(34, 211, 238, 0.12), 0 0 70px rgba(168, 85, 247, 0.1), inset 0 1px 0 rgba(255,255,255,0.06)",
+        "aurora-lg": "0 0 60px rgba(34, 211, 238, 0.18), 0 0 120px rgba(168, 85, 247, 0.14), inset 0 1px 0 rgba(255,255,255,0.08)",
+        "panel-hover": "0 16px 45px rgba(0,0,0,0.5), 0 0 0 1px rgba(34, 211, 238, 0.16)",
+        "nav-glow": "0 0 24px rgba(34, 211, 238, 0.1), inset 0 0 0 1px rgba(34, 211, 238, 0.12)",
       },
       backgroundImage: {
         "grid-pattern": "linear-gradient(rgba(34, 211, 228, 0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(34, 211, 228, 0.03) 1px, transparent 1px)",
         "gradient-radial": "radial-gradient(ellipse at center, var(--tw-gradient-stops))",
         "gradient-conic": "conic-gradient(from 180deg at 50% 50%, var(--tw-gradient-stops))",
         "mesh": "url(\"data:image/svg+xml,%3Csvg width='600' height='600' viewBox='0 0 600 600' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E\")",
+        "aurora-radial": "radial-gradient(ellipse 120% 55% at 50% -12%, rgba(34, 211, 238, 0.16), transparent 62%)",
+        "aurora-text": "linear-gradient(100deg, #22d3ee 0%, #818cf8 45%, #a855f7 80%, #22d3ee 120%)",
+        "hairline-grad": "linear-gradient(90deg, transparent, rgba(34,211,238,0.4), rgba(168,85,247,0.4), transparent)",
       },
       animation: {
         "fade-in": "fadeIn 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) forwards",
@@ -106,6 +114,11 @@ const config: Config = {
         "progress-fill": "progressFill 1s cubic-bezier(0.2, 0.8, 0.2, 1) forwards",
         "live-flash-up": "liveFlashUp 0.9s cubic-bezier(0.2,0.8,0.2,1) forwards",
         "live-flash-down": "liveFlashDown 0.9s cubic-bezier(0.2,0.8,0.2,1) forwards",
+        "aurora-text": "auroraText 9s linear infinite",
+        "orb": "orbFloat 16s ease-in-out infinite",
+        "orb-slow": "orbFloat 22s ease-in-out infinite",
+        "grid-pan": "gridPan 40s linear infinite",
+        "sheen": "sheen 4.5s ease-in-out infinite",
       },
       keyframes: {
         fadeIn: {
@@ -171,6 +184,22 @@ const config: Config = {
         liveFlashDown: {
           "0%": { backgroundColor: "rgba(242,54,69,0.22)", color: "#f87171" },
           "100%": { backgroundColor: "transparent", color: "inherit" },
+        },
+        auroraText: {
+          "0%": { backgroundPosition: "0% 50%" },
+          "100%": { backgroundPosition: "200% 50%" },
+        },
+        orbFloat: {
+          "0%, 100%": { transform: "translate3d(0,0,0) scale(1)", opacity: "0.7" },
+          "50%": { transform: "translate3d(14px,-20px,0) scale(1.08)", opacity: "1" },
+        },
+        gridPan: {
+          "0%": { backgroundPosition: "0 0" },
+          "100%": { backgroundPosition: "44px 44px" },
+        },
+        sheen: {
+          "0%": { transform: "translateX(-130%) skewX(-18deg)" },
+          "60%, 100%": { transform: "translateX(230%) skewX(-18deg)" },
         },
       },
       transitionDuration: {

@@ -24,7 +24,7 @@ const cardBorderStyles = {
 
 const iconBgStyles = {
   default: "bg-terminal-accentBg",
-  accent: "bg-terminal-accentBg",
+  accent: "bg-gradient-to-br from-terminal-accent/25 to-terminal-violet/20 border border-terminal-accent/30",
   success: "bg-terminal-bullBg",
   danger: "bg-terminal-bearBg",
   warning: "bg-terminal-warnBg",

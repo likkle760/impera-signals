@@ -107,18 +107,21 @@ export default function PortalLoginPage() {
   }
 
   return (
-    <div className="relative min-h-screen bg-terminal-bg overflow-hidden flex items-center justify-center px-4">
+    <div className="relative min-h-screen bg-terminal-ink overflow-hidden flex items-center justify-center px-4">
       {/* Animated background */}
       <div className="portal-bg" />
       <div className="portal-orb portal-orb-1" />
       <div className="portal-orb portal-orb-2" />
+      <div className="portal-orb portal-orb-3" />
 
       <div className="relative z-10 w-full max-w-md animate-rise">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="text-5xl mb-3 animate-glow inline-block">◈</div>
-          <h1 className="font-mono font-bold text-2xl tracking-tight text-white">
-            IMPERA <span className="text-sky-400">SIGNALS</span>
+          <div className="relative inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-terminal-accent via-sky-500 to-terminal-violet shadow-aurora-lg mb-4">
+            <span className="font-mono font-bold text-terminal-ink text-3xl leading-none">◈</span>
+          </div>
+          <h1 className="font-display font-bold text-3xl tracking-tight">
+            IMPERA <span className="aurora-text">SIGNALS</span>
           </h1>
           <p className="text-terminal-muted text-sm mt-1">
             Licensed trading intelligence platform
@@ -126,20 +129,25 @@ export default function PortalLoginPage() {
         </div>
 
         {/* Card */}
-        <div className="panel p-6 backdrop-blur bg-terminal-panel/80">
-          <div className="flex mb-6 border-b border-terminal-border">
+        <div className="relative card-elevated p-6">
+          <div className="absolute top-0 left-[12%] right-[12%] h-px bg-gradient-to-r from-transparent via-terminal-accent/50 to-transparent" />
+          <div className="flex mb-6 border-b border-terminal-border/60">
             <button
               onClick={() => { setMode("login"); setError(null); }}
-              className={`flex-1 pb-3 text-sm font-semibold transition-colors ${
-                mode === "login" ? "text-sky-300 border-b-2 border-sky-400" : "text-terminal-muted hover:text-white border-b-2 border-transparent"
+              className={`flex-1 pb-3 text-sm font-semibold transition-all ${
+                mode === "login"
+                  ? "text-terminal-accent border-b-2 border-terminal-accent"
+                  : "text-terminal-muted hover:text-white border-b-2 border-transparent"
               }`}
             >
               SIGN IN
             </button>
             <button
               onClick={() => { setMode("activate"); setError(null); }}
-              className={`flex-1 pb-3 text-sm font-semibold transition-colors ${
-                mode === "activate" ? "text-sky-300 border-b-2 border-sky-400" : "text-terminal-muted hover:text-white border-b-2 border-transparent"
+              className={`flex-1 pb-3 text-sm font-semibold transition-all ${
+                mode === "activate"
+                  ? "text-terminal-accent border-b-2 border-terminal-accent"
+                  : "text-terminal-muted hover:text-white border-b-2 border-transparent"
               }`}
             >
               ACTIVATE LICENSE
@@ -155,7 +163,7 @@ export default function PortalLoginPage() {
                   type="checkbox"
                   checked={remember}
                   onChange={(e) => setRemember(e.target.checked)}
-                  className="accent-sky-500"
+                  className="accent-cyan-400"
                 />
                 Remember me (stay signed in on this device)
               </label>
@@ -194,16 +202,19 @@ export default function PortalLoginPage() {
       <style jsx>{`
         @keyframes rse { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
         .animate-rise { animation: rse 600ms cubic-bezier(.2,.8,.2,1) both; }
-        @keyframes glowp { 0%,100% { text-shadow: 0 0 12px rgba(56,189,248,.6); } 50% { text-shadow: 0 0 28px rgba(56,189,248,.95); } }
-        .animate-glow { animation: glowp 2.6s ease-in-out infinite; display: inline-block; }
         @keyframes orba { 0%{transform:translate(0,0) scale(1);} 50%{transform:translate(60px,-40px) scale(1.15);} 100%{transform:translate(0,0) scale(1);} }
         @keyframes orbb { 0%{transform:translate(0,0) scale(1);} 50%{transform:translate(-50px,-60px) scale(1.2);} 100%{transform:translate(0,0) scale(1);} }
-        .portal-orb { position: absolute; border-radius: 9999px; filter: blur(90px); opacity: .35; }
-        .portal-orb-1 { width: 420px; height: 420px; background: #1d4ed8; top: -120px; left: -120px; animation: orba 16s ease-in-out infinite; }
-        .portal-orb-2 { width: 380px; height: 380px; background: #7c3aed; bottom: -140px; right: -120px; animation: orbb 20s ease-in-out infinite; }
+        .portal-orb { position: absolute; border-radius: 9999px; filter: blur(90px); opacity: .4; pointer-events: none; }
+        .portal-orb-1 { width: 420px; height: 420px; background: radial-gradient(circle, #22d3ee 0%, #1d4ed8 60%, transparent); top: -120px; left: -120px; animation: orba 16s ease-in-out infinite; }
+        .portal-orb-2 { width: 380px; height: 380px; background: radial-gradient(circle, #a855f7 0%, #7c3aed 60%, transparent); bottom: -140px; right: -120px; animation: orbb 20s ease-in-out infinite; }
+        .portal-orb-3 { width: 260px; height: 260px; background: radial-gradient(circle, #089981 0%, #065f46 60%, transparent); top: 40%; left: 55%; opacity: .25; animation: orba 24s ease-in-out infinite reverse; }
         .portal-bg { position: absolute; inset: 0;
-          background-image: radial-gradient(circle at 1px 1px, rgba(56,189,248,.12) 1px, transparent 0);
-          background-size: 34px 34px; }
+          background-image:
+            radial-gradient(circle at 1px 1px, rgba(56,189,248,.1) 1px, transparent 0),
+            linear-gradient(to right, rgba(34,211,238,.02) 1px, transparent 1px),
+            linear-gradient(to bottom, rgba(34,211,238,.02) 1px, transparent 1px);
+          background-size: 34px 34px, 64px 64px, 64px 64px;
+        }
       `}</style>
     </div>
   );
@@ -229,7 +240,7 @@ function Input({
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         required={required}
-        className={`w-full bg-terminal-panel2 border border-terminal-border rounded px-3 py-2 text-sm text-white placeholder:text-terminal-muted/60 focus:border-sky-500 focus:outline-none ${mono ? "font-mono" : ""}`}
+        className={`w-full bg-terminal-panel2/80 border border-terminal-border rounded-lg px-3 py-2.5 text-sm text-white placeholder:text-terminal-muted/60 focus:border-terminal-accent focus:ring-2 focus:ring-terminal-accent/20 focus:outline-none transition-all ${mono ? "font-mono" : ""}`}
       />
     </div>
   );
@@ -237,7 +248,7 @@ function Input({
 
 function ErrorNote({ text }: { text: string }) {
   return (
-    <div className="text-sm text-rose-400 bg-rose-500/10 border border-rose-500/30 rounded px-3 py-2">
+    <div className="text-sm text-rose-400 bg-terminal-bearBg border border-terminal-bearBorder rounded-lg px-3 py-2">
       {text}
     </div>
   );

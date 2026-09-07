@@ -58,11 +58,13 @@ export default function TopBar({ onMenuClick }: { onMenuClick?: () => void }) {
 
   return (
     <motion.header
-      className="h-16 bg-terminal-bg/95 backdrop-blur-xl border-b border-terminal-border sticky top-0 z-40"
+      className="relative h-16 bg-terminal-bg/70 backdrop-blur-2xl border-b border-terminal-border/50 sticky top-0 z-40"
       initial={{ y: -100, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       transition={{ duration: 0.5, ease: [0.2, 0.8, 0.2, 1] }}
     >
+      {/* Aurora hairline under the bar */}
+      <div className="absolute bottom-0 left-[8%] right-[8%] h-px bg-gradient-to-r from-transparent via-terminal-accent/40 to-transparent pointer-events-none" />
       <div className="h-full flex items-center justify-between px-4 sm:px-6 lg:px-8 gap-4">
         {/* LEFT: Brand + Mode + Session */}
         <div className="flex items-center gap-4 min-w-0">
@@ -83,12 +85,14 @@ export default function TopBar({ onMenuClick }: { onMenuClick?: () => void }) {
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.4, delay: 0.1 }}
           >
-            <div className="w-9 h-9 rounded-xl bg-terminal-accentBg border border-terminal-accent/30 flex items-center justify-center">
-              <span className="font-mono font-bold text-terminal-accent text-base">◈</span>
+            <div className="relative w-9 h-9 rounded-xl bg-gradient-to-br from-terminal-accent via-sky-500 to-terminal-violet flex items-center justify-center shadow-aurora">
+              <span className="font-mono font-bold text-terminal-ink text-base leading-none">◈</span>
+              <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-terminal-bull ring-2 ring-terminal-ink animate-pulse-live" />
             </div>
             <div className="hidden sm:block">
-              <h1 className="font-display font-bold tracking-tight text-terminal-text text-sm">
-                IMPERA <span className="text-terminal-accent">SIGNALS</span>
+              <h1 className="font-display font-bold tracking-tight text-terminal-text text-sm leading-tight">
+                IMPERA{" "}
+                <span className="aurora-text">SIGNALS</span>
               </h1>
               <div className="text-caption text-terminal-muted">Institutional SMC Terminal</div>
             </div>
@@ -123,7 +127,7 @@ export default function TopBar({ onMenuClick }: { onMenuClick?: () => void }) {
               {state.lastAnalysis ? formatTime(state.lastAnalysis) : "--:--:--"}
             </span>
           </div>
-          <div className="w-px h-6 bg-terminal-border" />
+          <div className="w-px h-6 bg-terminal-border/60" />
           <div className="flex flex-col items-center leading-tight">
             <span className="text-terminal-muted uppercase tracking-wider">Market</span>
             <span className="font-mono text-terminal-text">
@@ -169,12 +173,12 @@ export default function TopBar({ onMenuClick }: { onMenuClick?: () => void }) {
                 aria-haspopup="menu"
               >
                 <motion.div
-                  className="w-8 h-8 rounded-xl bg-terminal-accentBg border border-terminal-accent/30 flex items-center justify-center"
+                  className="w-8 h-8 rounded-xl bg-gradient-to-br from-terminal-accent via-sky-500 to-terminal-violet flex items-center justify-center border border-terminal-accent/30"
                   initial={{ scale: 0 }}
                   animate={{ scale: 1 }}
                   transition={{ type: "spring", stiffness: 200, damping: 20 }}
                 >
-                  <span className="font-mono font-bold text-terminal-accent text-sm">{user.email.charAt(0).toUpperCase()}</span>
+                  <span className="font-mono font-bold text-terminal-ink text-sm">{user.email.charAt(0).toUpperCase()}</span>
                 </motion.div>
                 <div className="hidden md:flex flex-col items-end gap-0.5">
                   <span className="text-caption text-terminal-muted truncate max-w-[160px]">{user.email}</span>

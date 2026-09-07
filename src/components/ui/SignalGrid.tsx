@@ -77,15 +77,20 @@ function SignalCardWrapper({ signal, decimals }: { signal: any; decimals: number
 
   return (
     <motion.div
-      className={`signal-card-wrapper panel overflow-hidden ${dirBorder} ${dirBg}`}
+      className={`signal-card-wrapper panel relative overflow-hidden ${dirBorder} ${dirBg}`}
       style={{ borderTopWidth: 3, borderTopColor: isLong ? "#22c55e" : "#ef4444" }}
       layout
     >
+      <div className="absolute top-0 left-[10%] right-[10%] h-px bg-gradient-to-r from-transparent via-terminal-accent/40 to-transparent pointer-events-none z-10" />
       <div className="p-5">
         <div className="flex items-start justify-between gap-4 mb-4">
           <div className="flex items-center gap-3">
             <motion.div
-              className={`flex items-center justify-center w-12 h-12 rounded-xl ${isLong ? "bg-terminal-bullBg" : "bg-terminal-bearBg"} ${dirColor}`}
+              className={`w-12 h-12 rounded-xl border flex items-center justify-center ${
+                isLong
+                  ? "bg-gradient-to-br from-terminal-bull/25 to-emerald-500/10 border-terminal-bullBorder/40"
+                  : "bg-gradient-to-br from-terminal-bear/25 to-rose-500/10 border-terminal-bearBorder/40"
+              } ${dirColor}`}
               initial={{ scale: 0, rotate: -90 }}
               animate={{ scale: 1, rotate: 0 }}
               transition={{ type: "spring", stiffness: 200, damping: 20 }}
@@ -116,8 +121,8 @@ function SignalCardWrapper({ signal, decimals }: { signal: any; decimals: number
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <span className="stat-trend text-terminal-accent font-mono text-sm">
-              R:R 1:{signal.riskReward.toFixed(2)}
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-terminal-bg/60 border border-terminal-accent/20 font-mono text-sm font-semibold text-terminal-accent">
+              R:R <span className="tabular-nums">1:{signal.riskReward.toFixed(2)}</span>
             </span>
           </div>
         </div>
