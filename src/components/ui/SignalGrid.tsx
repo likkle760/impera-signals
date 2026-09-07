@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { Card } from "./Card";
 import { Badge } from "./Badge";
 import { LiveIndicator } from "./LiveIndicator";
+import { computeManagementPlan } from "@/lib/engine/ea-management";
 
 interface SignalGridProps {
   signals: any[];
@@ -172,6 +173,46 @@ function SignalCardWrapper({ signal, decimals }: { signal: any; decimals: number
             })}
           </div>
         </div>
+
+        {/* EA-style Management Plan */}
+        {(() => {
+          const plan = computeManagementPlan(signal);
+          return (
+            <motion.div
+              className="mb-4 rounded-xl bg-terminal-panel2 border border-terminal-border/40 p-4"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: 0.15 }}
+            >
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-caption text-terminal-muted">🛠 MANAGEMENT (EA-STYLE)</span>
+                <span className="text-[10px] font-mono text-terminal-muted">auto plan</span>
+              </div>
+              <div className="space-y-2 text-sm">
+                <div className="flex items-start gap-2">
+                  <span className="font-mono text-terminal-accent flex-shrink-0">BE</span>
+                  <span className="text-terminal-muted">{plan.breakEven.label}</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="font-mono text-terminal-accent flex-shrink-0">PART</span>
+                  <span className="text-terminal-muted">{plan.partialClose.label}</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="font-mono text-terminal-accent flex-shrink-0">TRAIL</span>
+                  <span className="text-terminal-muted">{plan.trailing.label}</span>
+                </div>
+                {plan.lotSize && (
+                  <div className="flex items-start gap-2">
+                    <span className="font-mono text-terminal-accent flex-shrink-0">SIZE</span>
+                    <span className="text-terminal-muted">
+                      {plan.lotSize.suggested} @ {plan.lotSize.riskPct}% risk
+                    </span>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          );
+        })()}
 
         {/* Market Context */}
         <div className="grid grid-cols-2 gap-3 mb-4 pt-3 border-t border-terminal-border/50">

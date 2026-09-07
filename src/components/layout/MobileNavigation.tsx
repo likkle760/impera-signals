@@ -17,6 +17,7 @@ import {
   AlertTriangle,
   Settings,
   Shield,
+  Radio,
 } from "lucide-react";
 
 interface NavItem {
@@ -30,6 +31,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/signals", label: "Signals", icon: <Zap className="w-5 h-5" /> },
   { href: "/charts", label: "Charts", icon: <BarChart3 className="w-5 h-5" /> },
   { href: "/scanner", label: "Scanner", icon: <Search className="w-5 h-5" /> },
+  { href: "/news", label: "News", icon: <Radio className="w-5 h-5" /> },
   { href: "/markets", label: "Markets", icon: <Globe className="w-5 h-5" /> },
   { href: "/watchlist", label: "Watchlist", icon: <Star className="w-5 h-5" /> },
   { href: "/analytics", label: "Analytics", icon: <BarChart3 className="w-5 h-5" /> },

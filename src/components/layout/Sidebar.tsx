@@ -19,6 +19,7 @@ import {
   Settings,
   Shield,
   ChevronDown,
+  Radio,
 } from "lucide-react";
 
 interface NavSection {
@@ -47,6 +48,7 @@ const NAV_SECTIONS: NavSection[] = [
   {
     title: "Analysis",
     items: [
+      { href: "/news", label: "News Calendar", icon: <Radio className="w-4 h-4" />, badge: "FF", badgeVariant: "warning" },
       { href: "/future", label: "Future Ops", icon: <TrendingUp className="w-4 h-4" /> },
       { href: "/markets", label: "Markets", icon: <Globe className="w-4 h-4" /> },
       { href: "/watchlist", label: "Watchlist", icon: <Star className="w-4 h-4" /> },

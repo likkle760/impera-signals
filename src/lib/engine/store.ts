@@ -13,6 +13,7 @@ import {
 } from "./history";
 import { sendTelegram } from "../telegram";
 import { formatSignalMessage, formatWinMessage } from "./telegram-fmt";
+import { refreshNewsCalendar } from "./news-feed";
 
 export interface MarketStoreState {
   mode: "LIVE" | "DEMO";
@@ -131,6 +132,9 @@ export class MarketStore {
       }
     });
     await this.provider.start();
+    // Warm the economic calendar from ForexFactory so signals react to real
+    // news (non-blocking; keeps last-good calendar on failure).
+    void refreshNewsCalendar().catch(() => {});
     this.runScan();
     const scanIntervalSec = this.config.scanSeconds ?? 30;
     this.scanTimer = setInterval(() => this.runScan(), scanIntervalSec * 1000);
@@ -143,6 +147,8 @@ export class MarketStore {
 
   runScan() {
     const start = Date.now();
+    // Keep the news calendar warm each scan (throttled internally).
+    void refreshNewsCalendar().catch(() => {});
     this.setState({ lastScanStart: start });
     this.telegramLastScanKey = `${start}`;
     this.telegramSentThisScan = 0;

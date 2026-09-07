@@ -19,6 +19,7 @@ import { SWING_VALIDATION } from "./swing";
 import { ScalpSignalEngine } from "./scalp/signal";
 import { SCALPING_VALIDATION } from "./scalp";
 import type { Candle } from "../types";
+import { upcomingHighImpactTimes } from "./news-feed";
 
 export interface SignalEngineConfig {
   minSignalScore: number;
@@ -251,7 +252,8 @@ export class SignalEngine {
           trend: { emaFast: 50, emaSlow: 200, emaTrend: 200, adxMin: 15 },
           risk: { minRewardRisk: 1.5, stopBufferAtr: 1.3, tp1R: 2, tp2R: 3, defaultRiskPct: 0.5, stopMaxAtr: 6, stopMinAtr: 0.8 },
           momentum: { rsiRecovery: 45, relaxMomentum: true },
-          volatility: { atrPctFloor: 0.004, atrPctCeil: 0.1 }
+          volatility: { atrPctFloor: 0.004, atrPctCeil: 0.1 },
+          news: { enabled: true, blackoutBeforeMs: 4 * 60 * 60 * 1000, eventTimes: upcomingHighImpactTimes(instrument.symbol, 8 * 60 * 60 * 1000) }
         })
       : this.swingEngine;
 
@@ -294,7 +296,8 @@ export class SignalEngine {
       ? new ScalpSignalEngine({
           scoring: { strongScore: 70, minScore: 55 },
           spread: { maxSpreadToStop: 0.3 },
-          regime: { atrPctFloor: 0.001, atrPctCeil: 0.02, adxMin: 15 }
+          regime: { atrPctFloor: 0.001, atrPctCeil: 0.02, adxMin: 15 },
+          news: { enabled: true, blackoutBeforeMs: 15 * 60 * 1000, blackoutAfterMs: 5 * 60 * 1000, eventTimes: upcomingHighImpactTimes(instrument.symbol) }
         })
       : this.scalpEngine;
 

@@ -1,5 +1,6 @@
 import type { Signal } from "../engine/analysis-types";
 import { fmtPips, pipsBetween, pipsGained, pipsToTargets, pipSizeFor } from "./pips";
+import { computeManagementPlan } from "./ea-management";
 
 /**
  * Plain, human-readable signal card for Telegram. Kept deliberately simple:
@@ -85,6 +86,16 @@ export function formatSignalMessage(sig: Signal, mode: "NEW" | "PAPER" = "NEW"):
     ln.push(`Why: ${sig.reason}`);
     ln.push(``);
   }
+  // EA-style management plan — how the trade should be managed.
+  const mgmt = computeManagementPlan(sig);
+  ln.push(`MGT (EA-style)`);
+  ln.push(`  BE  : ${mgmt.breakEven.label}`);
+  ln.push(`  PART: ${mgmt.partialClose.label}`);
+  ln.push(`  TRAIL: ${mgmt.trailing.label}`);
+  if (mgmt.lotSize) {
+    ln.push(`  SIZE: ${mgmt.lotSize.suggested} @ ${mgmt.lotSize.riskPct}% risk`);
+  }
+  ln.push(``);
   // Footer + disclaimer
   ln.push(`───────────────`);
   ln.push(`ID:${sig.id.slice(0, 10)} · ${mode}`);

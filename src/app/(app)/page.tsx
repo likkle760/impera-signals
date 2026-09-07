@@ -5,6 +5,7 @@ import { decimalsFor } from "@/lib/formatting";
 import { Badge, SignalGrid, StatCard, LiveValue, MotionDiv } from "@/components/ui";
 import { motion } from "framer-motion";
 import { TelegramCta } from "@/components/TelegramCta";
+import { NewsWidget } from "@/components/NewsWidget";
 import {
   Zap,
   TrendingUp,
@@ -379,6 +380,11 @@ export default function DashboardPage() {
                 </div>
               </div>
             </div>
+          </MotionDiv>
+
+          {/* Upcoming News */}
+          <MotionDiv variants={item}>
+            <NewsWidget />
           </MotionDiv>
 
           {/* Future Opportunities */}
