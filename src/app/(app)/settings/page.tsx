@@ -4,7 +4,7 @@ import { DEFAULT_SETTINGS, loadSettings, saveSettings, UserSettings } from "@/li
 import { useMarketStore } from "@/lib/hooks/use-market-store";
 import { PageHeader } from "@/components/ui";
 import { motion } from "framer-motion";
-import { Settings2, Radar, Landmark, BellRing, Check, Database } from "lucide-react";
+import { Settings2, Radar, Landmark, BellRing, Check, Database, Target, Cpu } from "lucide-react";
 
 const container = {
   hidden: { opacity: 0 },
@@ -135,6 +135,31 @@ export default function SettingsPage() {
           </div>
         </section>
 
+        {/* Win-Rate Optimizer */}
+        <section className="card p-5">
+          <SectionTitle icon={<Target className="w-4 h-4" />} title="Win-Rate Optimizer" sub="aims emitted signals at a ~90% historical hit-rate" />
+          <div className="mb-2">
+            <Toggle label="Win-Rate Optimizer (A+ bar)" value={s.winRateOptimizer} onChange={(v) => update({ winRateOptimizer: v })} />
+          </div>
+          <p className="text-[11px] text-terminal-muted leading-snug mb-3">
+            When on, only grand-slam setups are emitted — across {" "}
+            <span className="text-cyan-300">scalps</span>, <span className="text-cyan-300">buy/sell limits</span> and{" "}
+            <span className="text-cyan-300">swings</span> alike:
+          </p>
+          <ul className="text-[11px] text-terminal-muted space-y-1.5 mb-3">
+            <OptimizerBullet ok>Confidence ≥ 90 (A+ / PREMIUM SETUP)</OptimizerBullet>
+            <OptimizerBullet ok>Full 4H + 1H + execution trend alignment</OptimizerBullet>
+            <OptimizerBullet ok>Confirmed BOS/CHOCH + displacement momentum</OptimizerBullet>
+            <OptimizerBullet ok>Liquidity context (sweep or resting pocket)</OptimizerBullet>
+            <OptimizerBullet ok>Reward:risk ≥ 1:1.5 at TP1</OptimizerBullet>
+            <OptimizerBullet ok>Symbol historical hit-rate ≥ ~90% (min 20 backtested trades)</OptimizerBullet>
+          </ul>
+          <p className="text-[11px] text-amber-300/80 leading-snug">
+            Target ~90% hit-rate is a selectivity goal, not a profit promise — win rate alone never
+            is. The 1:1.5 RR floor keeps profit factor in view so a high hit-rate still pays.
+          </p>
+        </section>
+
         {/* Prop firm */}
         <section className="card p-5">
           <SectionTitle icon={<Landmark className="w-4 h-4" />} title="Funded Account — Prop Firm Pacer" sub="discipline & pacing targets for funded-eval rules" />
@@ -231,6 +256,24 @@ export default function SettingsPage() {
             </p>
           </div>
         </section>
+
+        {/* Performance */}
+        <section className="card p-5">
+          <SectionTitle icon={<Cpu className="w-4 h-4" />} title="Low-End Performance Mode" sub="keep the dashboard smooth on low-spec hardware" />
+          <div className="mb-2">
+            <Toggle label="Performance Mode" value={s.perfMode} onChange={(v) => update({ perfMode: v })} />
+          </div>
+          <p className="text-[11px] text-terminal-muted leading-snug mb-3">
+            Turns off the heaviest visual work so it hurts less on laptop/older CPUs: glass{" "}
+            <span className="text-white">backdrop blur</span>, glow shadows, floating aurora orbs and
+            background animation. Cards swap to cleaner flat surfaces with no visual quality loss to
+            the data itself.
+          </p>
+          <p className="text-[11px] text-terminal-muted leading-snug">
+            Live-rule ticks are already capped at 1 refresh/sec site-wide. On very old hardware also
+            lower <span className="text-white">Scan Frequency</span> above to every 60–120s.
+          </p>
+        </section>
       </motion.div>
     </motion.div>
   );
@@ -280,5 +323,14 @@ function Toggle({ label, value, onChange }: { label: string; value: boolean; onC
         />
       </button>
     </div>
+  );
+}
+
+function OptimizerBullet({ ok, children }: { ok?: boolean; children: React.ReactNode }) {
+  return (
+    <li className="flex items-start gap-2">
+      <Check className={`w-3.5 h-3.5 mt-0.5 shrink-0 ${ok ? "text-emerald-400" : "text-terminal-muted"}`} />
+      <span className="text-terminal-muted">{children}</span>
+    </li>
   );
 }

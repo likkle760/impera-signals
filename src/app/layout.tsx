@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { MarketStoreProvider } from "@/lib/hooks/use-market-store";
+import { PerfModeBootstrap } from "@/components/PerfModeBootstrap";
 
 export const metadata: Metadata = {
   title: "IMPERA SIGNALS V2",
@@ -15,6 +16,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
+        <PerfModeBootstrap />
         <MarketStoreProvider>{children}</MarketStoreProvider>
       </body>
     </html>

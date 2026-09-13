@@ -776,6 +776,47 @@
   }
 }
 
+/* ============================================================
+   LOW-END PERFORMANCE MODE — html[data-perf="true"]
+   Disables the most GPU/CPU-expensive chrome so the dashboard
+   stays smooth on low-spec hardware: glass backdrop blur, glow
+   shadows and ambient orbs/aurora animation all get switched off.
+   Backgrounds swap to near-opaque so the no-blur look stays clean.
+   ============================================================ */
+html[data-perf="true"] .card,
+html[data-perf="true"] .card-elevated,
+html[data-perf="true"] .card-glass,
+html[data-perf="true"] .panel,
+html[data-perf="true"] .panel-glass,
+html[data-perf="true"] .panel-section {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+html[data-perf="true"] .card,
+html[data-perf="true"] .card-elevated,
+html[data-perf="true"] .panel,
+html[data-perf="true"] .panel-glass {
+  box-shadow: none !important;
+}
+
+html[data-perf="true"] .orb,
+html[data-perf="true"] .orb-slow {
+  display: none !important;
+}
+
+html[data-perf="true"] .aurora-text {
+  animation: none !important;
+  background-size: 100% auto;
+}
+
+html[data-perf="true"] *,
+html[data-perf="true"] *::before,
+html[data-perf="true"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+}
+
 /* Print styles */
 @media print {
   .no-print { display: none !important; }

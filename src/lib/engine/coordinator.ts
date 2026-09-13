@@ -27,6 +27,7 @@ import { buildMarketIntel } from "./market/market-intel";
 import { InstitutionalEntryEngine } from "./market/institutional-entry";
 import type { FairValueGap } from "./analysis-types";
 import { scoreConfidence, confidenceBand, gradeLabel } from "./confidence";
+import { WIN_RATE_TARGET, applyWinRateOptimizer } from "./win-rate-optimizer";
 
 export interface AnalysisConfig {
   minSignalScore: number;
@@ -47,6 +48,10 @@ export interface AnalysisConfig {
   moreSignals?: boolean;
   /** Minimum multi-confirmation confidence (0-100) to allow a trade. Default 80 (B grade). */
   minConfidence?: number;
+  /** WIN-RATE OPTIMIZER: only A+ (90+) full-confluence setups pass, plus a
+   *  per-symbol historical hit-rate bar. Targets a ~90% historical hit-rate on
+   *  emitted signals (selectivity, not a profit guarantee). Default ON. */
+  winRateOptimizer?: boolean;
   scanSeconds: number;
 }
 
@@ -66,6 +71,7 @@ export const DEFAULT_ANALYSIS_CONFIG: AnalysisConfig = {
   dayTradeMode: true,
   swingMode: true,
   moreSignals: true,
+  winRateOptimizer: true,
   scanSeconds: 60
 };
 
@@ -197,10 +203,13 @@ export class AnalysisCoordinator {
             if (!signal || !riskAllowed(riskRes.riskLevel, this.config.maxRiskLevel)) continue;
 
             const primarySeries = analysis.series.find((s) => s.timeframe === "5m") ?? analysis.series[0];
-            const intel = evaluateSignal(signal, analysis, primarySeries?.candles ?? []);
+            const intel = evaluateSignal(signal, analysis, primarySeries?.candles ?? [], {
+              winRateAnchor: this.config.winRateOptimizer ? WIN_RATE_TARGET : undefined
+            });
             signal.confidence = intel.confidence;
             signal.winRate = intel.winRate ? Number((intel.winRate.winRate * 100).toFixed(0)) : undefined;
             signal.winRateTrades = intel.winRate?.trades;
+            signal.winRateTarget = this.config.winRateOptimizer ? WIN_RATE_TARGET : undefined;
             signal.newsVerdict = intel.verdict;
             const mi = buildMarketIntel(analysis);
             signal.narrative = {
@@ -254,6 +263,30 @@ export class AnalysisCoordinator {
 
             if (!conf.passed || !rrPass) {
               continue; // NO TRADE — wait for confirmation (§9)
+            }
+
+            // ── WIN-RATE OPTIMIZER (§15.5) ──
+            // When on, only textbook A+ (90+) full-confluence setups with a
+            // healthy per-symbol historical hit-rate get emitted. This is the
+            // selectivity layer that pushes the historical hit-rate toward the
+            // ~90% target — regardless of whether the signal is a scalp, a
+            // buy/sell limit or a swing.
+            if (this.config.winRateOptimizer) {
+              const gate = applyWinRateOptimizer(
+                signal,
+                analysis,
+                conf,
+                Math.max(signal.riskReward, 0),
+                intel.winRate
+              );
+              signal.optimizerGate = {
+                passed: gate.pass,
+                target: gate.target,
+                reasons: gate.reasons
+              };
+              if (!gate.pass) {
+                continue; // NO TRADE — below the 90% hit-rate bar (§15.5)
+              }
             }
 
             signal.confidence = conf.total;

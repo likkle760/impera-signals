@@ -148,6 +148,8 @@ export interface Signal {
   /** Live backtest-derived win-rate estimate (historical probability, not a guarantee). */
   winRate?: number;
   winRateTrades?: number;
+  /** Win-rate target this signal is graded against (0.9 under the optimizer). */
+  winRateTarget?: number;
   /** Human-readable live verdict (win-rate + pending news) for the trader. */
   newsVerdict?: string;
   /** Honest strategy-validation note (e.g. "NOT VALIDATED FOR LIVE USE"). */
@@ -179,6 +181,12 @@ export interface Signal {
     band: string;
     rr: number;
     rrPass: boolean;
+  };
+  /** Win-rate optimizer verdict attached to the signal. */
+  optimizerGate?: {
+    passed: boolean;
+    target: number;
+    reasons: string[];
   };
 }
 

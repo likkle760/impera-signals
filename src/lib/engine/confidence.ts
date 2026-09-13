@@ -135,8 +135,8 @@ export function gradeLabel(total: number): "A+" | "A" | "B" | "C" | "F" {
  * messaging, NOT a guarantee — see §15). A+ setups target roughly 80%+.
  */
 export function winRateTarget(total: number): number {
-  if (total >= 90) return 0.85;
-  if (total >= 85) return 0.82;
+  if (total >= 90) return 0.9;
+  if (total >= 85) return 0.85;
   if (total >= 80) return 0.8;
   if (total >= 70) return 0.72;
   return 0.55;

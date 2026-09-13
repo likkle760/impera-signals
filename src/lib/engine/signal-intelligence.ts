@@ -117,8 +117,18 @@ export function estimateWinRate(symbol: string, candles: Candle[]): WinRateInfo 
 /**
  * Enrich a live signal with previous-trend/historical win-rate info and pending
  * high-impact news, returning a decision-grade confidence.
+ *
+ * @param opts.winRateAnchor target hit-rate the blend is anchored to — the
+ *   win-rate optimizer raises this to 0.9 so only symbols with a strong
+ *   historical record keep their confidence (defaults to the balanced 0.8).
  */
-export function evaluateSignal(signal: Signal, analysis: InstrumentAnalysis, candles: Candle[]): SignalIntelligence {
+export function evaluateSignal(
+  signal: Signal,
+  analysis: InstrumentAnalysis,
+  candles: Candle[],
+  opts: { winRateAnchor?: number } = {}
+): SignalIntelligence {
+  const anchor = opts.winRateAnchor ?? 0.8;
   const baseConfidence = Number.isFinite(signal.confidence) ? signal.confidence : 50;
   const news = newsContext(signal.symbol, signal.direction);
   const newsAdj = newsAdjustment(news, signal.direction);
@@ -127,15 +137,15 @@ export function evaluateSignal(signal: Signal, analysis: InstrumentAnalysis, can
   let wrAdj = 0;
   let verdict: string;
   if (winRate) {
-    // Blend historical win-rate into confidence, anchored to the 80% accuracy
-    // target (§15). A track record AT ~80% keeps confidence neutral; well above
-    // it pushes toward the A+/A bar; materially below pulls the setup down.
-    // Confident drawdown — don't fully trust tiny samples.
+    // Blend historical win-rate into confidence, anchored to the accuracy
+    // target (§15 / §15.5). A track record AT target keeps confidence neutral;
+    // well above it pushes toward the A+ bar; materially below pulls the setup
+    // down. Confident drawdown — don't fully trust tiny samples.
     const trades = winRate.trades;
     const conf = trades >= 40 ? 1.0 : trades >= 20 ? 0.8 : trades >= 10 ? 0.6 : 0.4;
-    const raw = (winRate.winRate - 0.8) * 25;
+    const raw = (winRate.winRate - anchor) * 25;
     wrAdj = Math.round(Math.max(-12, Math.min(12, raw)) * conf);
-    verdict = `Live win-rate ${(winRate.winRate * 100).toFixed(0)}% over ${winRate.trades} backtested ${winRate.symbol} trades (target ~80%).`;
+    verdict = `Live win-rate ${(winRate.winRate * 100).toFixed(0)}% over ${winRate.trades} backtested ${winRate.symbol} trades (target ~${(anchor * 100).toFixed(0)}%).`;
   } else {
     verdict = "Backtest history unavailable for this symbol yet (no win-rate claim until recorded).";
   }

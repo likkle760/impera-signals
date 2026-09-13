@@ -24,6 +24,14 @@ export interface UserSettings {
   propDailyLossPct: number;
   propRiskPct: number;
   propConsistencyCap: number;
+  /** WIN-RATE OPTIMIZER: only A+ (90+) setups with full confluence pass, and a
+   *  symbol's historical hit-rate must clear the target bar. Drives the engine
+   *  toward a ~90% historical hit-rate target on emitted signals — win rate is a
+   *  selectivity target, NOT a profit guarantee. Default ON. */
+  winRateOptimizer: boolean;
+  /** Low-End Performance Mode: strips glass blur + ambient animation so the
+   *  dashboard stays smooth on low-spec hardware. Default OFF. */
+  perfMode: boolean;
 }
 
 export const DEFAULT_SETTINGS: UserSettings = {
@@ -44,7 +52,9 @@ export const DEFAULT_SETTINGS: UserSettings = {
   propMaxLossPct: 10,
   propDailyLossPct: 5,
   propRiskPct: 0.5,
-  propConsistencyCap: 0.5
+  propConsistencyCap: 0.5,
+  winRateOptimizer: true,
+  perfMode: false
 };
 
 const KEY = "impera.settings.v5";

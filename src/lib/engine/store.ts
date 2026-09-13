@@ -55,6 +55,12 @@ export class MarketStore {
   private telegramLastScanKey = "";
   private lastTelegramSentAt = 0;
 
+  /** Quote-driven state refreshes are throttled to once per second so high-frequency
+   *  live ticks don't force a full page re-render for every single quote on
+   *  low-spec hardware. Scans still update the snapshot at the real cadence. */
+  private lastQuoteStateAt = 0;
+  static readonly QUOTE_STATE_THROTTLE_MS = 1000;
+
   constructor(provider?: MarketDataProvider, config?: Partial<AnalysisConfig>, onAlert?: (e: AlertEvent) => void) {
     const settings = loadSettings();
     this.config = {
@@ -125,7 +131,10 @@ export class MarketStore {
   async start() {
     this.provider.subscribe({
       onQuote: () => {
-        this.setState({ lastMarketUpdate: Date.now() });
+        const now = Date.now();
+        if (now - this.lastQuoteStateAt < MarketStore.QUOTE_STATE_THROTTLE_MS) return;
+        this.lastQuoteStateAt = now;
+        this.setState({ lastMarketUpdate: now });
       },
       onError: (e) => {
         this.setState({ error: e.message, connection: "lost" });
