@@ -137,12 +137,12 @@ export default function SettingsPage() {
 
         {/* Win-Rate Optimizer */}
         <section className="card p-5">
-          <SectionTitle icon={<Target className="w-4 h-4" />} title="Win-Rate Optimizer" sub="aims emitted signals at a ~90% historical hit-rate" />
+          <SectionTitle icon={<Target className="w-4 h-4" />} title="Win-Rate Optimizer" sub="aims emitted signals at an 80%+ historical hit-rate" />
           <div className="mb-2">
-            <Toggle label="Win-Rate Optimizer (A+ bar)" value={s.winRateOptimizer} onChange={(v) => update({ winRateOptimizer: v })} />
+            <Toggle label="Win-Rate Optimizer (A grade)" value={s.winRateOptimizer} onChange={(v) => update({ winRateOptimizer: v })} />
           </div>
           <p className="text-[11px] text-terminal-muted leading-snug mb-3">
-            When on, only grand-slam setups are emitted — across {" "}
+            When on, high-confluence setups are preferred across {" "}
             <span className="text-cyan-300">scalps</span>, <span className="text-cyan-300">buy/sell limits</span> and{" "}
             <span className="text-cyan-300">swings</span> alike:
           </p>
@@ -151,12 +151,12 @@ export default function SettingsPage() {
             <OptimizerBullet ok>Full 4H + 1H + execution trend alignment</OptimizerBullet>
             <OptimizerBullet ok>Confirmed BOS/CHOCH + displacement momentum</OptimizerBullet>
             <OptimizerBullet ok>Liquidity context (sweep or resting pocket)</OptimizerBullet>
-            <OptimizerBullet ok>Reward:risk ≥ 1:1.5 at TP1</OptimizerBullet>
+            <OptimizerBullet ok>Reward:risk ≥ 1:1.2 at TP1</OptimizerBullet>
             <OptimizerBullet ok>Historical hit-rate nudges grade (never blocks)</OptimizerBullet>
           </ul>
           <p className="text-[11px] text-amber-300/80 leading-snug">
             If a scan produces no A-grade setup, the best-graded candidates at your confidence bar are
-            shown so the feed is never empty (they appear tagged below the optimizer bar). Target ~90%
+            shown so the feed is never empty (they appear tagged below the optimizer bar). Target 80%+
             hit-rate is a selectivity goal, not a profit promise.
           </p>
         </section>

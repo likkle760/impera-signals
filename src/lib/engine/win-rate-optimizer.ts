@@ -6,40 +6,40 @@ import type { ConfidenceBreakdown } from "./confidence";
  * WIN-RATE OPTIMIZER (§15.5)
  *
  * A conservative selectivity layer that raises the trade bar so the *historical*
- * hit-rate of emitted signals trends toward the ~90% target across scalps,
+ * hit-rate of emitted signals trends toward the 80%+ target across scalps,
  * buy/sell limits and swings. It works by only admitting "textbook" trades:
  *
  *   - Confluence    : multi-confirmation confidence >= 85 (A / VERY STRONG SETUP)
  *   - Full alignment: 4H + 1H + execution TF all agree with the trade direction
  *   - Proof         : a real BOS/CHoCH (never chop), confirmed MACD momentum
  *   - Context       : liquidity context (sweep or resting pocket) on entry side
- *   - Economics     : reward:risk stays above the mode floor (>= 1.5 even for
+ *   - Economics     : reward:risk stays above the mode floor (>= 1.2 even for
  *                     scalps), so a high hit-rate never means "small wins,
  *                     occasional huge loss"
  *
  * Track record: a symbol's backtested hit-rate is blended INTO confidence by
- * the signal-intelligence layer (anchor 0.9) — it nudges grade, but is NOT a
- * kill switch. Hard-blocking on historical win-rate was removed because it
- * starved the feed (most symbols' short backtests miss the bar) — a nudge keeps
- * the high-win-rate aim without silencing the app.
+ * the signal-intelligence layer (anchor 0.8, the 80%+ aim) — it nudges grade,
+ * but is NOT a kill switch. Hard-blocking on historical win-rate was removed
+ * because it starved the feed (most symbols' short backtests miss the bar) — a
+ * nudge keeps the high-win-rate aim without silencing the app.
  *
- * Honest framing: this is a SELECTIVITY target. ~90% historical hit-rate on
- * A-grade signals is the design goal, measured continuously in backtests; it is
- * NOT a guarantee of future wins, and win-rate alone is never a profit claim.
- * The RR floor keeps expectancy (profit factor) in view — that's what makes the
- * high hit-rate worth having.
+ * Honest framing: this is a SELECTIVITY target. An 80%+ historical hit-rate is
+ * the design goal, measured continuously in backtests; it is NOT a guarantee of
+ * future wins, and win-rate alone is never a profit claim. The RR floor keeps
+ * expectancy (profit factor) in view — that's what makes the high hit-rate
+ * worth having.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-/** Target historical hit-rate for emitted signals (0.9 = 90% aim). */
-export const WIN_RATE_TARGET = 0.9;
+/** Target historical hit-rate for emitted signals (0.8 = 80%+ aim). */
+export const WIN_RATE_TARGET = 0.8;
 
 /** A-grade admission bar (VERY STRONG SETUP) — an achievable-but-strict bar. */
 export const OPTIMIZER_CONFIDENCE_BAR = 85;
 
 /** Minimum reward:risk enforced for optimizer signals (also a scalp-friendly
- *  floor — scalps keep tight risk but must still offer >= 1.5R at TP1). */
-export const OPTIMIZER_MIN_RR = 1.5;
+ *  floor — scalps keep tight risk but must still offer >= 1.2R at TP1). */
+export const OPTIMIZER_MIN_RR = 1.2;
 
 export interface WinRateOptimizerResult {
   pass: boolean;

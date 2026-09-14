@@ -57,8 +57,8 @@ function baseSignal(): Signal {
 }
 
 describe("win-rate optimizer", () => {
-  it("targets a 90% aim faceplate but admits at the achievable A grade", () => {
-    expect(WIN_RATE_TARGET).toBe(0.9);
+  it("targets an 80%+ hit-rate but admits at the achievable A grade", () => {
+    expect(WIN_RATE_TARGET).toBe(0.8);
     expect(OPTIMIZER_CONFIDENCE_BAR).toBe(85);
     const res = applyWinRateOptimizer(baseSignal(), baseAnalysis(), baseBreakdown(), 2.2);
     expect(res.pass).toBe(true);
@@ -100,7 +100,7 @@ describe("win-rate optimizer", () => {
   });
 
   it("enforces the reward:risk floor", () => {
-    const res = applyWinRateOptimizer(baseSignal(), baseAnalysis(), baseBreakdown(), 1.2);
+    const res = applyWinRateOptimizer(baseSignal(), baseAnalysis(), baseBreakdown(), 1.0);
     expect(res.pass).toBe(false);
     expect(res.reasons.join()).toContain("reward:risk");
   });

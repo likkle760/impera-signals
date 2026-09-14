@@ -48,9 +48,9 @@ export interface AnalysisConfig {
   moreSignals?: boolean;
   /** Minimum multi-confirmation confidence (0-100) to allow a trade. Default 80 (B grade). */
   minConfidence?: number;
-  /** WIN-RATE OPTIMIZER: only A+ (90+) full-confluence setups pass, plus a
-   *  per-symbol historical hit-rate bar. Targets a ~90% historical hit-rate on
-   *  emitted signals (selectivity, not a profit guarantee). Default ON. */
+  /** WIN-RATE OPTIMIZER: prefers A-grade (85+) full-confluence setups and biases
+   *  the engine toward an 80%+ historical hit-rate on emitted signals
+   *  (selectivity, not a profit guarantee). Default ON. */
   winRateOptimizer?: boolean;
   scanSeconds: number;
 }

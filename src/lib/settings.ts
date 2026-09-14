@@ -24,9 +24,8 @@ export interface UserSettings {
   propDailyLossPct: number;
   propRiskPct: number;
   propConsistencyCap: number;
-  /** WIN-RATE OPTIMIZER: only A+ (90+) setups with full confluence pass, and a
-   *  symbol's historical hit-rate must clear the target bar. Drives the engine
-   *  toward a ~90% historical hit-rate target on emitted signals — win rate is a
+  /** WIN-RATE OPTIMIZER: prefers A-grade (85+) full-confluence setups and biases
+   *  the engine toward an 80%+ historical hit-rate on emitted signals — win rate is a
    *  selectivity target, NOT a profit guarantee. Default ON. */
   winRateOptimizer: boolean;
   /** Low-End Performance Mode: strips glass blur + ambient animation so the
