@@ -1,4 +1,4 @@
-import type { Instrument, MarketRegime, NoTradeReason, RiskLevel, Timeframe } from "../types";
+import type { Instrument, MarketRegime, NoTradeReason, RiskLevel, Timeframe, CandleSeries } from "../types";
 import { ALL_TIMEFRAMES } from "../instruments";
 import type { MarketDataProvider } from "../providers/types";
 import type {
@@ -28,6 +28,7 @@ import { InstitutionalEntryEngine } from "./market/institutional-entry";
 import type { FairValueGap } from "./analysis-types";
 import { scoreConfidence, confidenceBand, gradeLabel } from "./confidence";
 import { WIN_RATE_TARGET, applyWinRateOptimizer } from "./win-rate-optimizer";
+import { MIN_EV_SAMPLE, expectedValueRounded } from "./expected-value";
 
 export interface AnalysisConfig {
   minSignalScore: number;
@@ -104,6 +105,14 @@ export class AnalysisCoordinator {
   private risk = new RiskEngine();
   private signalEngine: SignalEngine;
   private futureEngine = new FutureOpportunityEngine();
+
+  /** Derived-analysis cache: heavy per-symbol calculations (indicators, market
+   *  structure, trend, liquidity, FVG, S/R) are reused across scans while the
+   *  closed-candle window is unchanged. Only price/spread/session refresh every
+   *  scan — the "new candle → recompute / new tick → tick-level only" model.
+   *  This is the main CPU/duplicate-work saver for long-running dashboards. */
+  private analysisCache = new Map<string, { fingerprint: string; analysis: InstrumentAnalysis }>();
+  static readonly ANALYSIS_CACHE_MAX = 80;
 
   constructor(private config: AnalysisConfig = DEFAULT_ANALYSIS_CONFIG) {
     this.signalEngine = new SignalEngine({
@@ -270,6 +279,13 @@ export class AnalysisCoordinator {
               continue; // NO TRADE — wait for confirmation (§9)
             }
 
+            // ── EXPECTED VALUE (§15.6) ──
+            // Attached only when a backtested win-rate exists, and expressed in
+            // R units so a high hit-rate can never mask a losing profile.
+            if (intel.winRate && intel.winRate.trades >= MIN_EV_SAMPLE && rr > 0) {
+              signal.expectedValueR = expectedValueRounded(intel.winRate.winRate, rr);
+            }
+
             signal.confidence = conf.total;
             signal.universeConfidence = {
               total: conf.total,
@@ -334,6 +350,25 @@ export class AnalysisCoordinator {
     const series = provider.getCandleSeries(instrument.symbol);
     if (!series.length) return null;
 
+    // ── Derived-data cache (event-driven) ──
+    // Fingerprint = closed-candle window. When nothing relevant changed, reuse
+    // the heavy derivations and only refresh the tick-level fields (price,
+    // spread, timestamp, session). New candles invalidate automatically because
+    // the fingerprint changes; intra-bucket live ticks do NOT (they can't move
+    // structure/trend/liquidity, only price, which we always refresh).
+    const fp = seriesFingerprint(series);
+    const cached = this.analysisCache.get(instrument.symbol);
+    if (cached && cached.fingerprint === fp) {
+      // Purely tick-level refresh on top of the shared candle-derived analysis.
+      return {
+        ...cached.analysis,
+        price: quote.last,
+        spread: quote.spread,
+        timestamp: quote.timestamp,
+        session: getCurrentSession()
+      };
+    }
+
     const indicators = this.ta.analyze(series);
     const structure = this.structure.analyze(series, "5m");
     const trend = this.trend.analyzeTrend(series, indicators, structure);
@@ -357,7 +392,7 @@ export class AnalysisCoordinator {
 
     const session = getCurrentSession();
 
-    return {
+    const analysis: InstrumentAnalysis = {
       symbol: instrument.symbol,
       name: instrument.name,
       assetClass: instrument.assetClass,
@@ -377,6 +412,12 @@ export class AnalysisCoordinator {
       session,
       series
     };
+    this.analysisCache.set(instrument.symbol, { fingerprint: fp, analysis });
+    if (this.analysisCache.size > AnalysisCoordinator.ANALYSIS_CACHE_MAX) {
+      const oldest = this.analysisCache.keys().next().value;
+      if (oldest !== undefined) this.analysisCache.delete(oldest);
+    }
+    return analysis;
   }
 
   private buildScannerRow(
@@ -449,6 +490,22 @@ export class AnalysisCoordinator {
       direction: draft.direction
     };
   }
+}
+
+/**
+ * Fingerprint of a series window for the derived-analysis cache. Built from the
+ * per-timeframe closed-candle bucket (length + newest candle start). It changes
+ * only when a NEW candle is appended or the count changes — live ticks inside
+ * an open candle keep the same bucket start, so they safely reuse the cache.
+ */
+function seriesFingerprint(series: CandleSeries[]): string {
+  let out = "";
+  for (const s of series) {
+    const n = s.candles.length;
+    const last = s.candles[n - 1];
+    out += `${s.timeframe}:${n}:${last ? last.time : 0}|`;
+  }
+  return out;
 }
 
 function riskAllowed(level: string, max: string): boolean {

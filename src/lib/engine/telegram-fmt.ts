@@ -80,6 +80,10 @@ export function formatSignalMessage(sig: Signal, mode: "NEW" | "PAPER" = "NEW"):
   if (sig.winRate != null) {
     ln.push(`Hist win   : ${sig.winRate}% (${sig.winRateTrades ?? 0} bt) — est, not a promise`);
   }
+  if (sig.expectedValueR != null) {
+    const ev = sig.expectedValueR;
+    ln.push(`EV (est)   : ${ev >= 0 ? "+" : ""}${ev.toFixed(2)}R  (hit-rate × R:R — ${ev >= 0 ? "+EV profile" : "NEGATIVE — avoid repeating"})`);
+  }
   ln.push(``);
 
   if (sig.reason) {

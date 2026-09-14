@@ -25,6 +25,20 @@ export interface SignalIntelligence {
 
 const bt = new BacktestEngine();
 
+/** Win-rate estimate cache — a ~600-bar backtest per signal per scan is the
+ *  hottest CPU cost in the live loop, so identical candle windows reuse the
+ *  result. Keyed on the closed-candle window (length + last two bucket starts);
+ *  bounded so it can never grow unbounded in long-running sessions. */
+const WIN_RATE_CACHE_MAX = 120;
+const winRateCache = new Map<string, WinRateInfo>();
+
+function winRateKey(symbol: string, candles: Candle[]): string {
+  const n = candles.length;
+  const last = candles[n - 1];
+  const prev = candles[n - 2];
+  return `${symbol}:${n}:${prev ? prev.time : 0}:${last ? last.time : 0}`;
+}
+
 function estimateAtrLocal(candles: Candle[], upto: number, period = 20): number {
   const start = Math.max(1, upto - period);
   let sum = 0;
@@ -46,6 +60,9 @@ function estimateAtrLocal(candles: Candle[], upto: number, period = 20): number 
  */
 export function estimateWinRate(symbol: string, candles: Candle[]): WinRateInfo | null {
   if (!candles || candles.length < 60) return null;
+  const key = winRateKey(symbol, candles);
+  const cached = winRateCache.get(key);
+  if (cached) return cached;
   const ema = (values: number[], p: number) => {
     const out = new Array(values.length).fill(NaN);
     if (!values.length) return out;
@@ -103,7 +120,7 @@ export function estimateWinRate(symbol: string, candles: Candle[]): WinRateInfo 
   const wins = closed.filter((t) => t.outcome === "WIN").length;
   const losses = closed.filter((t) => t.outcome === "LOSS").length;
   const netR = closed.reduce((a, t) => a + (t.r ?? 0), 0);
-  return {
+  const info: WinRateInfo = {
     symbol,
     timeframe: "5m",
     trades: closed.length,
@@ -112,6 +129,12 @@ export function estimateWinRate(symbol: string, candles: Candle[]): WinRateInfo 
     winRate: wins / closed.length,
     netR
   };
+  winRateCache.set(key, info);
+  if (winRateCache.size > WIN_RATE_CACHE_MAX) {
+    const oldest = winRateCache.keys().next().value;
+    if (oldest !== undefined) winRateCache.delete(oldest);
+  }
+  return info;
 }
 
 /**

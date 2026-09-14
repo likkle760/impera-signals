@@ -59,4 +59,29 @@ describe("AnalysisCoordinator + DemoMarketDataProvider integration", () => {
       expect(row.setup).toBeNull();
     }
   });
+
+  it("reuses derived analysis across scans while the candle window is unchanged (event-driven cache)", async () => {
+    const provider = new DemoMarketDataProvider();
+    await provider.start();
+    const coordinator = new AnalysisCoordinator();
+    const s1 = coordinator.analyze(provider);
+    const s2 = coordinator.analyze(provider);
+    provider.stop();
+
+    const a1 = s1.instruments["EURUSD"];
+    const a2 = s2.instruments["EURUSD"];
+    expect(a1).toBeDefined();
+    expect(a2).toBeDefined();
+
+    // Top-level is a fresh object (so the caller can tag simulated/etc)…
+    expect(a2).not.toBe(a1);
+    // …but the heavy candle-derived derivations are shared, not recomputed.
+    expect(a2.trend).toBe(a1.trend);
+    expect(a2.indicators).toBe(a1.indicators);
+    expect(a2.liquidity).toBe(a1.liquidity);
+
+    // Tick-level fields stay fresh on every scan.
+    expect(a2.price).toBe(provider.getQuote("EURUSD")!.last);
+    expect(a2.session).toBe(a1.session);
+  });
 });

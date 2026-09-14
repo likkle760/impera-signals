@@ -150,6 +150,9 @@ export interface Signal {
   winRateTrades?: number;
   /** Win-rate target this signal is graded against (0.9 under the optimizer). */
   winRateTarget?: number;
+  /** Expected value in R units (winRate × R:R − lose-rate). Only set when a real
+   *  backtested win-rate exists — separates EV from the confidence score. */
+  expectedValueR?: number;
   /** Human-readable live verdict (win-rate + pending news) for the trader. */
   newsVerdict?: string;
   /** Honest strategy-validation note (e.g. "NOT VALIDATED FOR LIVE USE"). */
