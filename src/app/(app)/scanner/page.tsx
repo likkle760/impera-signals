@@ -146,7 +146,7 @@ export default function ScannerPage() {
             </thead>
             <tbody>
               {rows.map((r) => (
-                <tr key={r.symbol} className="hover:bg-terminal-panel/60">
+                <tr key={r.symbol} className="cv-auto hover:bg-terminal-panel/60">
                   <td className="font-semibold">
                     <Link href={`/markets/${r.symbol}`} className="text-terminal-text hover:text-terminal-accent transition-colors">
                       {r.symbol}

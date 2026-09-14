@@ -505,7 +505,7 @@ export default function JournalPage() {
               </thead>
               <tbody>
                 {[...trades].sort((a, b) => b.openedAt - a.openedAt).map((t) => (
-                  <tr key={t.id}>
+                  <tr key={t.id} className="cv-auto">
                     <td className="text-terminal-muted">{new Date(t.openedAt).toLocaleDateString("en-GB")}</td>
                     <td className="font-semibold text-terminal-text">{t.symbol}</td>
                     <td><span className={`badge ${DIRECTION_BG[t.direction]}`}>{t.direction}</span></td>

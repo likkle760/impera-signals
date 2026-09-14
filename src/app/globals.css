@@ -475,6 +475,13 @@
   .empty-title { @apply text-lg font-semibold text-terminal-text mb-1; }
   .empty-desc { @apply text-terminal-muted text-sm max-w-xs; }
 
+  /* Long list rows/cards: skip layout+paint for off-screen items. Huge win on
+     scanner/history/signals-style pages with dozens of rows. */
+  .cv-auto {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 56px;
+  }
+
   .skeleton { @apply bg-terminal-panel animate-pulse rounded-xl; }
   .skeleton-text { @apply h-4 bg-terminal-panel/70 animate-pulse rounded w-3/4; }
   .skeleton-title { @apply h-6 bg-terminal-panel/70 animate-pulse rounded w-1/3; }
@@ -689,22 +696,25 @@
 
   .gradient-text { @apply bg-gradient-to-r from-terminal-accent via-terminal-accentDim to-terminal-violet bg-clip-text text-transparent; }
 
-  /* V2 signature: animated aurora gradient text (cyan → indigo → violet) */
+  /* V2 signature: aurora gradient text (cyan → indigo → violet).
+     Static by default — the 9s background-position animation forced a per-frame
+     repaint of every page-chrome (headers, sidebar) and is a known low-end
+     laptop lag source. The gradient still reads as a premium aurora glow. */
   .aurora-text {
     @apply bg-clip-text text-transparent;
     background-image: linear-gradient(100deg, #22d3ee 0%, #818cf8 45%, #a855f7 80%, #22d3ee 120%);
-    background-size: 200% auto;
-    animation: auroraText 9s linear infinite;
   }
 
-  /* Ambient floating aurora orb backdrop element */
+  /* Ambient floating aurora orb backdrop element. Static by default — an
+     animated blurred orb sat BEHIND backdrop-filter cards, forcing the browser
+     to re-blur every card above it on every animation frame (the classic
+     low-end laptop lag bomb). Static glow keeps the look without the cost. */
   .orb {
     @apply absolute rounded-full blur-3xl;
     pointer-events: none;
-    animation: orbFloat 16s ease-in-out infinite;
   }
   .orb-slow {
-    animation: orbFloat 22s ease-in-out infinite;
+    /* reserved for opt-in motion */
   }
 
   /* Thin gradient hairline divider */

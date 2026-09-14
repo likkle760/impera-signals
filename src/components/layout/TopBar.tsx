@@ -1,6 +1,6 @@
 "use client";
 
-import { useMarketState } from "@/lib/hooks/use-market-store";
+import { useMarketState, useMarketStore } from "@/lib/hooks/use-market-store";
 import { formatTime } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -8,8 +8,31 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Badge, LiveIndicator } from "@/components/ui";
 import { Menu, Bell, LogOut, Settings, Shield, ChevronDown } from "lucide-react";
 
+/**
+ * LiveClock writes the formatted time straight into the DOM on a 1s interval
+ * (via ref.textContent) — the header NEVER re-renders just to tick a clock.
+ * Only ever mounted in the header, which itself re-renders rarely (on scans).
+ */
+function Clock({ getMs }: { getMs: () => number }) {
+  const ref = useRef<HTMLSpanElement | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    const sync = () => {
+      if (!cancelled && ref.current) ref.current.textContent = formatTime(getMs());
+    };
+    sync();
+    const id = setInterval(sync, 1000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [getMs]);
+  return <span ref={ref}>--:--:--</span>;
+}
+
 export default function TopBar({ onMenuClick }: { onMenuClick?: () => void }) {
   const state = useMarketState();
+  const store = useMarketStore();
   const router = useRouter();
   const [user, setUser] = useState<{ email: string; role: string } | null>(null);
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -124,14 +147,14 @@ export default function TopBar({ onMenuClick }: { onMenuClick?: () => void }) {
           <div className="flex flex-col items-center leading-tight">
             <span className="text-terminal-muted uppercase tracking-wider">Analysis</span>
             <span className="font-mono text-terminal-accent">
-              {state.lastAnalysis ? formatTime(state.lastAnalysis) : "--:--:--"}
+              <Clock getMs={() => store.getState().lastAnalysis} />
             </span>
           </div>
           <div className="w-px h-6 bg-terminal-border/60" />
           <div className="flex flex-col items-center leading-tight">
             <span className="text-terminal-muted uppercase tracking-wider">Market</span>
             <span className="font-mono text-terminal-text">
-              {state.lastMarketUpdate ? formatTime(state.lastMarketUpdate) : "--:--:--"}
+              <Clock getMs={() => store.getState().lastMarketUpdate} />
             </span>
           </div>
         </motion.div>

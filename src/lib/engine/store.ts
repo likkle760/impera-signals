@@ -47,6 +47,10 @@ export class MarketStore {
 
   private state: MarketStoreState;
   private listeners = new Set<() => void>();
+  /** Tick-only subscribers (quote clock). Never re-renders data pages — quote
+   *  ticks are throttled to 1/sec and pushed ONLY here so data-heavy pages only
+   *  ever re-render on real scan/analysis updates, not on every live tick. */
+  private tickListeners = new Set<() => void>();
 
   private previousSignals = new Map<string, Signal>();
 
@@ -108,6 +112,11 @@ export class MarketStore {
     return () => this.listeners.delete(fn);
   }
 
+  subscribeTicks(fn: () => void): () => void {
+    this.tickListeners.add(fn);
+    return () => this.tickListeners.delete(fn);
+  }
+
   private setState(patch: Partial<MarketStoreState>) {
     this.state = { ...this.state, ...patch };
     for (const l of this.listeners) l();
@@ -134,7 +143,11 @@ export class MarketStore {
         const now = Date.now();
         if (now - this.lastQuoteStateAt < MarketStore.QUOTE_STATE_THROTTLE_MS) return;
         this.lastQuoteStateAt = now;
-        this.setState({ lastMarketUpdate: now });
+        // Quote ticks refresh the clock WITHOUT notifying data pages — they only
+        // re-render when the scan/analysis snapshot actually changes. This is the
+        // single biggest render-churn saver for low-end laptops.
+        this.state = { ...this.state, lastMarketUpdate: now };
+        for (const t of this.tickListeners) t();
       },
       onError: (e) => {
         this.setState({ error: e.message, connection: "lost" });

@@ -120,7 +120,7 @@ export default function HistoryPage() {
             </thead>
             <tbody>
               {entries.slice(0, 200).map((h) => (
-                <tr key={h.id}>
+                <tr key={h.id} className="cv-auto">
                   <td className="font-mono text-terminal-muted">{formatTime(h.createdAt)}</td>
                   <td className="font-semibold text-terminal-text">{h.symbol}</td>
                   <td>
