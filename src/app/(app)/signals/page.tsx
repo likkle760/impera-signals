@@ -161,7 +161,22 @@ export default function SignalsPage() {
                   transition={{ duration: 0.35, ease: [0.2, 0.8, 0.2, 1] }}
                   className="hover-lift"
                 >
-                  <SignalCard signal={s} decimals={decimalsFor(s.symbol)} />
+                  <div className="relative">
+                    {s.optimizerGate && (
+                      <span
+                        className={`absolute top-3 right-3 z-10 px-2 py-1 rounded-full text-[10px] font-bold tracking-wider border ${
+                          s.optimizerGate.passed
+                            ? "bg-emerald-500/15 text-emerald-300 border-emerald-400/40"
+                            : "bg-amber-500/15 text-amber-300 border-amber-400/40"
+                        }`}
+                      >
+                        {s.optimizerGate.passed
+                          ? "OPTIMIZED · TARGET 90%"
+                          : "BELOW A-BAR (FALLBACK)"}
+                      </span>
+                    )}
+                    <SignalCard signal={s} decimals={decimalsFor(s.symbol)} />
+                  </div>
                 </motion.div>
               ))}
             </AnimatePresence>

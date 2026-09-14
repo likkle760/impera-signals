@@ -136,6 +136,11 @@ export class AnalysisCoordinator {
       scanner: []
     };
 
+    // Candidates that passed the base gates but missed the optimizer's A bar.
+    // Only surfaced if NO signal cleared the optimizer in this scan, so the
+    // feed always has something actionable even in the quietest sessions.
+    const optimizerFallback: Signal[] = [];
+
     for (const instrument of instruments) {
       const analysis = this.analyzeInstrument(provider, instrument);
       if (!analysis) continue;
@@ -265,30 +270,6 @@ export class AnalysisCoordinator {
               continue; // NO TRADE — wait for confirmation (§9)
             }
 
-            // ── WIN-RATE OPTIMIZER (§15.5) ──
-            // When on, only textbook A+ (90+) full-confluence setups with a
-            // healthy per-symbol historical hit-rate get emitted. This is the
-            // selectivity layer that pushes the historical hit-rate toward the
-            // ~90% target — regardless of whether the signal is a scalp, a
-            // buy/sell limit or a swing.
-            if (this.config.winRateOptimizer) {
-              const gate = applyWinRateOptimizer(
-                signal,
-                analysis,
-                conf,
-                Math.max(signal.riskReward, 0),
-                intel.winRate
-              );
-              signal.optimizerGate = {
-                passed: gate.pass,
-                target: gate.target,
-                reasons: gate.reasons
-              };
-              if (!gate.pass) {
-                continue; // NO TRADE — below the 90% hit-rate bar (§15.5)
-              }
-            }
-
             signal.confidence = conf.total;
             signal.universeConfidence = {
               total: conf.total,
@@ -299,6 +280,24 @@ export class AnalysisCoordinator {
               rrPass: true
             };
 
+            // ── WIN-RATE OPTIMIZER (§15.5) ──
+            // When on, only textbook A-grade (85+) full-confluence setups get
+            // emitted — across scalps, buy/sell limits and swings alike. Setups
+            // that only MISS the optimizer bar are held as fallback candidates so
+            // the signal feed is never empty even during quiet sessions.
+            if (this.config.winRateOptimizer) {
+              const gate = applyWinRateOptimizer(signal, analysis, conf, rr);
+              signal.optimizerGate = {
+                passed: gate.pass,
+                target: gate.target,
+                reasons: gate.reasons
+              };
+              if (!gate.pass) {
+                optimizerFallback.push(signal);
+                continue; // below the A bar — kept for fallback only (§15.5)
+              }
+            }
+
             snapshot.signals.push(signal);
           }
         }
@@ -306,6 +305,16 @@ export class AnalysisCoordinator {
 
       const futures = this.futureEngine.generate(instrument, analysis);
       snapshot.futureOpportunities.push(...futures);
+    }
+
+    // GUARANTEED SIGNAL AVAILABILITY — if the optimizer rejected everything this
+    // scan, promote the best-graded fallback candidates so signals are always
+    // visible on the dashboard (they're clearly tagged optimizerGate.passed=false).
+    if (this.config.winRateOptimizer && snapshot.signals.length === 0 && optimizerFallback.length > 0) {
+      const best = [...optimizerFallback]
+        .sort((a, b) => b.confidence - a.confidence)
+        .slice(0, 6);
+      snapshot.signals.push(...best);
     }
 
     snapshot.signals.sort((a, b) => {

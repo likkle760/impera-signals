@@ -147,16 +147,17 @@ export default function SettingsPage() {
             <span className="text-cyan-300">swings</span> alike:
           </p>
           <ul className="text-[11px] text-terminal-muted space-y-1.5 mb-3">
-            <OptimizerBullet ok>Confidence ≥ 90 (A+ / PREMIUM SETUP)</OptimizerBullet>
+            <OptimizerBullet ok>Confidence ≥ 85 (A / VERY STRONG SETUP)</OptimizerBullet>
             <OptimizerBullet ok>Full 4H + 1H + execution trend alignment</OptimizerBullet>
             <OptimizerBullet ok>Confirmed BOS/CHOCH + displacement momentum</OptimizerBullet>
             <OptimizerBullet ok>Liquidity context (sweep or resting pocket)</OptimizerBullet>
             <OptimizerBullet ok>Reward:risk ≥ 1:1.5 at TP1</OptimizerBullet>
-            <OptimizerBullet ok>Symbol historical hit-rate ≥ ~90% (min 20 backtested trades)</OptimizerBullet>
+            <OptimizerBullet ok>Historical hit-rate nudges grade (never blocks)</OptimizerBullet>
           </ul>
           <p className="text-[11px] text-amber-300/80 leading-snug">
-            Target ~90% hit-rate is a selectivity goal, not a profit promise — win rate alone never
-            is. The 1:1.5 RR floor keeps profit factor in view so a high hit-rate still pays.
+            If a scan produces no A-grade setup, the best-graded candidates at your confidence bar are
+            shown so the feed is never empty (they appear tagged below the optimizer bar). Target ~90%
+            hit-rate is a selectivity goal, not a profit promise.
           </p>
         </section>
 

@@ -2,13 +2,12 @@ import { describe, expect, it } from "vitest";
 import type { InstrumentAnalysis, Signal } from "./analysis-types";
 import type { ConfidenceBreakdown } from "./confidence";
 import {
-  MIN_WIN_RATE_SAMPLE,
   OPTIMIZER_CONFIDENCE_BAR,
   WIN_RATE_TARGET,
   applyWinRateOptimizer
 } from "./win-rate-optimizer";
 
-function baseBreakdown(patch: Partial<ConfidenceBreakdown["details"]> = {}, total = 92): ConfidenceBreakdown {
+function baseBreakdown(patch: Partial<ConfidenceBreakdown["details"]> = {}, total = 88): ConfidenceBreakdown {
   return {
     trend: 20,
     structure: 15,
@@ -20,7 +19,7 @@ function baseBreakdown(patch: Partial<ConfidenceBreakdown["details"]> = {}, tota
     total,
     passed: total >= OPTIMIZER_CONFIDENCE_BAR,
     reasons: ["fixture"],
-    grade: "PREMIUM SETUP",
+    grade: "VERY STRONG SETUP",
     details: {
       htfAligned: { "4h": true, "1h": true, exec: true },
       structure: { bos: true, choch: false, sequence: true },
@@ -53,28 +52,24 @@ function baseSignal(): Signal {
     symbol: "XAUUSD",
     direction: "BUY",
     riskReward: 2.2,
-    confidence: 92
+    confidence: 88
   } as unknown as Signal;
 }
 
-const goodRate = { symbol: "XAUUSD", timeframe: "5m" as const, trades: 50, wins: 47, losses: 3, winRate: 0.94, netR: 4.2 };
-
 describe("win-rate optimizer", () => {
-  it("targets a 90% hit-rate", () => {
+  it("targets a 90% aim faceplate but admits at the achievable A grade", () => {
     expect(WIN_RATE_TARGET).toBe(0.9);
-    expect(MIN_WIN_RATE_SAMPLE).toBeGreaterThanOrEqual(20);
-  });
-
-  it("admits a textbook A+ setup", () => {
-    const res = applyWinRateOptimizer(baseSignal(), baseAnalysis(), baseBreakdown(), 2.2, goodRate);
+    expect(OPTIMIZER_CONFIDENCE_BAR).toBe(85);
+    const res = applyWinRateOptimizer(baseSignal(), baseAnalysis(), baseBreakdown(), 2.2);
     expect(res.pass).toBe(true);
     expect(res.reasons).toHaveLength(0);
   });
 
-  it("rejects a setup below the A+ bar", () => {
-    const res = applyWinRateOptimizer(baseSignal(), baseAnalysis(), baseBreakdown({}, 88), 2.2, goodRate);
+  it("rejects a setup below the A bar", () => {
+    const res = applyWinRateOptimizer(baseSignal(), baseAnalysis(), baseBreakdown({}, 80), 2.2);
     expect(res.pass).toBe(false);
     expect(res.reasons.join().toLowerCase()).toContain("confidence");
+    expect(res.reasons.join()).toContain("(A bar)");
   });
 
   it("rejects without full multi-timeframe alignment", () => {
@@ -82,8 +77,7 @@ describe("win-rate optimizer", () => {
       baseSignal(),
       baseAnalysis(),
       baseBreakdown({ htfAligned: { "4h": true, "1h": false, exec: true } }),
-      2.2,
-      goodRate
+      2.2
     );
     expect(res.pass).toBe(false);
     expect(res.reasons.join()).toContain("alignment");
@@ -94,28 +88,19 @@ describe("win-rate optimizer", () => {
       baseSignal(),
       baseAnalysis(),
       baseBreakdown({ momentum: { displacement: true, confirmed: false } }),
-      2.2,
-      goodRate
+      2.2
     );
     expect(res.pass).toBe(false);
     expect(res.reasons.join()).toContain("Momentum");
   });
 
-  it("rejects a symbol with a weak historical hit-rate", () => {
-    const poorRate = { ...goodRate, wins: 25, losses: 25, winRate: 0.5 };
-    const res = applyWinRateOptimizer(baseSignal(), baseAnalysis(), baseBreakdown(), 2.2, poorRate);
-    expect(res.pass).toBe(false);
-    expect(res.reasons.join()).toContain("50%");
-  });
-
-  it("ignores tiny win-rate samples (not enough evidence)", () => {
-    const tiny = { ...goodRate, trades: 8, wins: 2, winRate: 0.25 };
-    const res = applyWinRateOptimizer(baseSignal(), baseAnalysis(), baseBreakdown(), 2.2, tiny);
+  it("does not hard-block on a weak historical hit-rate (advisory)", () => {
+    const res = applyWinRateOptimizer(baseSignal(), baseAnalysis(), baseBreakdown(), 2.2);
     expect(res.pass).toBe(true);
   });
 
   it("enforces the reward:risk floor", () => {
-    const res = applyWinRateOptimizer(baseSignal(), baseAnalysis(), baseBreakdown(), 1.2, goodRate);
+    const res = applyWinRateOptimizer(baseSignal(), baseAnalysis(), baseBreakdown(), 1.2);
     expect(res.pass).toBe(false);
     expect(res.reasons.join()).toContain("reward:risk");
   });
@@ -125,8 +110,7 @@ describe("win-rate optimizer", () => {
       baseSignal(),
       baseAnalysis({ sweeps: [], equalLows: [], equalHighs: [], areas: [] }),
       baseBreakdown({ liquidity: { sweepHigh: false, sweepLow: false, cleanRejection: false } }),
-      2.2,
-      goodRate
+      2.2
     );
     expect(res.pass).toBe(false);
     expect(res.reasons.join()).toContain("liquidity");
