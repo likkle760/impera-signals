@@ -168,14 +168,15 @@ export class CryptoMarketDataProvider implements MarketDataProvider {
     this.emitQuotes();
     for (const l of this.listenerSets) l.onStatus?.(this.getMarketStatus());
 
-    // Poll quotes every 3s
+    // Poll quotes every 6s (quotes drive the tick clock, not data pages — a
+    // slower poll cuts Binance API cost + CPU with zero visible impact).
     const poll = setInterval(async () => {
       const quotes = await this.fetchQuotes();
       for (const q of quotes) {
         for (const l of this.listenerSets) l.onQuote?.(q);
         this.updateCandles(q);
       }
-    }, 3000);
+    }, 6000);
     this.timers.push(poll);
   }
 

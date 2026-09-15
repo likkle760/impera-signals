@@ -282,7 +282,7 @@ export class DemoMarketDataProvider implements MarketDataProvider {
   private timers: NodeJS.Timeout[] = [];
   private running = false;
 
-  constructor(private tickMs = 1000) {
+  constructor(private tickMs = 1000, public dayOffset = 0) {
     this.rng = {};
     for (const sym of this.symbols) this.rng[sym.symbol] = mulberry32(hash(sym.symbol));
     for (const sym of this.symbols) this.initQuote(sym);
@@ -321,23 +321,32 @@ export class DemoMarketDataProvider implements MarketDataProvider {
     this.quotes.set(sym.symbol, quote);
   }
 
-  private seedCandles(sym: Instrument, timeframe: Timeframe, limit: number): Candle[] {
-    const r = this.rng[sym.symbol];
+  private seedCandles(sym: Instrument, timeframe: Timeframe, limit: number, dayOffset = 0): Candle[] {
+    // Deterministic per (symbol, day) so a given market on a given day is
+    // stable, but SIM sessions differ day-to-day like a real feed. Realistic
+    // trending episodes (impulses + pullbacks) let the SMC gates actually fire
+    // — a pure random walk never forms a qualifying setup.
+    const daySeed = Math.floor(Date.now() / 86400000) - dayOffset;
+    const r = mulberry32(hash(sym.symbol) ^ (daySeed * 2654435761) ^ timeframe.length);
     const tfMs = TIMEFRAME_MS[timeframe];
     const vol = VOLATILITY[sym.symbol] ?? 0.002 * BASE_PRICES[sym.symbol];
     const base = BASE_PRICES[sym.symbol] ?? 1.0;
     const now = Math.floor(Date.now() / tfMs) * tfMs;
     const candles: Candle[] = [];
     let price = base;
-    let trend = 0;
+    let trend = (r() - 0.5) * vol * 0.2;
     for (let i = 0; i < limit; i++) {
-      if (r() > 0.985) trend = (r() - 0.5) * vol * 6;
-      else if (r() > 0.92) trend *= 0.5;
-      price += trend + (r() - 0.5) * vol * 2;
+      // Persistent momentum with REALISTIC bar magnitudes: per-bar true range
+      // must be on the order of `vol`, otherwise ATR collapses and every
+      // ATR-relative gate (proximity, risk/RR, zone sizing) rejects the
+      // instrument. Impulses give the higher timeframes real bull/bear regimes.
+      if (r() > 0.94) trend = (r() - 0.5) * vol * 5;
+      else trend = trend * 0.72 + (r() - 0.5) * vol * 0.8;
+      price += trend + (r() - 0.5) * vol * 1.2;
       const open = price;
-      const close = open + (r() - 0.5) * vol * 2 + trend;
-      const high = Math.max(open, close) + (r() - 0.5) * vol;
-      const low = Math.min(open, close) - (r() - 0.5) * vol;
+      const close = open + (r() - 0.5) * vol * 1.2 + trend * 0.5;
+      const high = Math.max(open, close) + (r() - 0.5) * vol * 0.7;
+      const low = Math.min(open, close) - (r() - 0.5) * vol * 0.7;
       const time = now - (limit - i) * tfMs;
       candles.push({
         time: time / 1000,
@@ -358,7 +367,7 @@ export class DemoMarketDataProvider implements MarketDataProvider {
   ): Promise<Candle[]> {
     const sym = this.symbols.find((s) => s.symbol === symbol);
     if (!sym) return [];
-    return this.seedCandles(sym, timeframe, limit);
+    return this.seedCandles(sym, timeframe, limit, this.dayOffset);
   }
 
   getCandleSeries(symbol: string): CandleSeries[] {
@@ -382,7 +391,7 @@ export class DemoMarketDataProvider implements MarketDataProvider {
       for (const tf of ALL_TIMEFRAMES) {
         const key = `${sym.symbol}:${tf}`;
         if (!this.candles.has(key)) {
-          this.candles.set(key, this.seedCandles(sym, tf, 500));
+          this.candles.set(key, this.seedCandles(sym, tf, 500, this.dayOffset));
         }
       }
     }

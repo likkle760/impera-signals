@@ -20,7 +20,14 @@ import type {
  */
 export class FutureOpportunityEngine {
   /** Only consider levels that sit within this many ATRs of current price. */
-  private static readonly PROXIMITY_ATR = 1.1;
+  private static readonly PROXIMITY_ATR = 2.0;
+
+  /** Minimum 1h/4h swing-momentum score needed to stage a zone when the
+   *  daily higher-timeframe read is flat. Watchlist entries are pre-setup
+   *  observations (never auto-traded), so staging on 1h/4h momentum alone is
+   *  legitimate — it catches pullback/continuation zones HTF-based gating
+   *  would otherwise miss in quiet or demo markets. */
+  private static readonly SWING_SCORE_MIN = 2;
 
   generate(
     instrument: Instrument,
@@ -44,14 +51,14 @@ export class FutureOpportunityEngine {
     const resistance = this.nearLevel(analysis.supportResistance.resistances, price, atrVal, "above");
 
     // BUY ZONE: bullish swing context + support within reach of current price.
-    if (htfBull && support) {
+    if ((htfBull || swing.bullScore >= FutureOpportunityEngine.SWING_SCORE_MIN) && support) {
       const zoneLo = support - atrVal * 0.15;
       const zoneHi = support + atrVal * 0.3;
       out.push(this.makeZone(instrument, analysis, "BUY ZONE", "BUY", [zoneLo, zoneHi], swing, timeNow));
     }
 
     // SELL ZONE: bearish swing context + resistance within reach of current price.
-    if (htfBear && resistance) {
+    if ((htfBear || swing.bearScore >= FutureOpportunityEngine.SWING_SCORE_MIN) && resistance) {
       const zoneLo = resistance - atrVal * 0.3;
       const zoneHi = resistance + atrVal * 0.15;
       out.push(this.makeZone(instrument, analysis, "SELL ZONE", "SELL", [zoneLo, zoneHi], swing, timeNow));

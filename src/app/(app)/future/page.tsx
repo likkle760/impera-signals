@@ -91,6 +91,7 @@ export default function FuturePage() {
                         </div>
                       </div>
                       <span className={`badge ${buy ? DIRECTION_BG.BUY : DIRECTION_BG.SELL}`}>{f.kind}</span>
+                      {f.simulated && <span className="badge badge-neutral">SIM</span>}
                     </div>
 
                     {/* Confidence meter */}

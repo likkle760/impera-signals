@@ -59,9 +59,8 @@ export class MarketStore {
   private telegramLastScanKey = "";
   private lastTelegramSentAt = 0;
 
-  /** Quote-driven state refreshes are throttled to once per second so high-frequency
-   *  live ticks don't force a full page re-render for every single quote on
-   *  low-spec hardware. Scans still update the snapshot at the real cadence. */
+  /** Quote ticks are throttled to 1/sec and pushed ONLY to the tick channel —
+   *  data pages never re-render on ticks, only when the scan snapshot changes. */
   private lastQuoteStateAt = 0;
   static readonly QUOTE_STATE_THROTTLE_MS = 1000;
 
@@ -78,7 +77,11 @@ export class MarketStore {
       dayTradeMode: settings.dayTradeMode,
       swingMode: settings.swingMode,
       moreSignals: settings.moreSignals,
-      minConfidence: settings.minConfidence
+      minConfidence: settings.minConfidence,
+      // Simulated instruments (e.g. XAUUSD whenever OANDA is unavailable/revoked)
+      // always surface for observation — tagged SIM, excluded from history and
+      // Telegram by updateHistory(). Real-money channels stay clean regardless.
+      allowSimulatedSignals: true
     };
     this.provider = provider ?? new DemoMarketDataProvider();
     this.coordinator = new AnalysisCoordinator(this.config);
@@ -191,7 +194,10 @@ export class MarketStore {
     this.setState({ history });
   }
 
-  private updateHistory(newSignals: Signal[]): HistoryEntry[] {
+  private updateHistory(allSignals: Signal[]): HistoryEntry[] {
+    // Simulated (demo-fed) signals are for observation only. They must not
+    // pollute the live ledger, win-rate analytics or Telegram.
+    const newSignals = allSignals.filter((s) => !s.simulated);
     let history = [...this.state.history];
     // terminal entries we already have stay; remove active entries that no longer exist
     const activeIds = new Set(newSignals.map((s) => s.id));

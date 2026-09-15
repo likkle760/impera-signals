@@ -79,7 +79,8 @@ export default function SignalsPage() {
             </h1>
             <p className="text-terminal-muted mt-2 max-w-xl">
               Filtered, high-confluence institutional setups. Every signal is backed by
-              multi-timeframe SMC/ICT confluence and live OANDA data.
+              multi-timeframe SMC/ICT confluence and live market data. Symbols marked
+              SIM run on a simulated fallback feed (e.g. gold when OANDA is offline).
             </p>
           </div>
           <div className="flex items-center gap-2 bg-terminal-bgElevated/60 border border-terminal-border/60 rounded-xl px-3 py-1.5 text-caption text-terminal-muted">
@@ -161,6 +162,11 @@ export default function SignalsPage() {
                   className="hover-lift"
                 >
                   <div className="relative">
+                    {s.simulated && (
+                      <span className="absolute bottom-14 left-3 z-10 px-2 py-1 rounded-full text-[10px] font-bold tracking-wider border bg-slate-500/15 text-slate-300 border-slate-400/40">
+                        SIM — DEMO DATA
+                      </span>
+                    )}
                     {s.optimizerGate && (
                       <span
                         className={`absolute top-3 right-3 z-10 px-2 py-1 rounded-full text-[10px] font-bold tracking-wider border ${

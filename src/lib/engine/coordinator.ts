@@ -53,6 +53,11 @@ export interface AnalysisConfig {
    *  the engine toward an 80%+ historical hit-rate on emitted signals
    *  (selectivity, not a profit guarantee). Default ON. */
   winRateOptimizer?: boolean;
+  /** DEMO/TESTING: allow simulated (demo-fed) instruments to produce signals and
+   *  future opportunities so the pipeline is observable without a live feed.
+   *  Every such signal is tagged `simulated` and is never tradable for real
+   *  money. Default OFF (live mode blocks synthetic signals entirely). */
+  allowSimulatedSignals?: boolean;
   scanSeconds: number;
 }
 
@@ -158,9 +163,13 @@ export class AnalysisCoordinator {
       analysis.simulated = provider.isSimulatedSymbol?.(instrument.symbol) ?? !provider.isLive;
       snapshot.instruments[instrument.symbol] = analysis;
 
-      // Simulated-only instruments must NOT generate buy/sell/limit/swing
-      // signals or futures — their prices are synthetic, not real.
-      if (analysis.simulated) {
+      // Simulated-only instruments (e.g. XAUUSD when OANDA is unavailable) must
+      // NOT generate tradable signals — their prices are synthetic. The store
+      // passes allowSimulatedSignals=true so they run the FULL pipeline anyway
+      // and every emitted signal/future is tagged `simulated` (SIM) for
+      // observation; history + Telegram exclude them regardless. With the flag
+      // off, the instrument is shown as a SIM-only scanner row.
+      if (analysis.simulated && !this.config.allowSimulatedSignals) {
         snapshot.scanner.push({
           symbol: instrument.symbol,
           name: instrument.name,
@@ -193,7 +202,7 @@ export class AnalysisCoordinator {
           if (!draft || draft.noTrade) continue;
           const score = this.signalEngine.score(instrument, analysis, draft);
           const isLimit = draft.type.includes("LIMIT");
-          const minForThis = isLimit ? this.config.minLimitScore : this.config.minSignalScore;
+          const minForThis = this.scoreFloorFor(isLimit, analysis);
           if (score >= minForThis) {
             const riskRes = this.risk.evaluate(
               instrument,
@@ -215,6 +224,10 @@ export class AnalysisCoordinator {
               riskRes
             );
             if (!signal || !riskAllowed(riskRes.riskLevel, this.config.maxRiskLevel)) continue;
+
+            // In demo mode a simulated instrument's signal is surfaced for
+            // testing/observation but tagged so it can never be traded for real.
+            if (analysis.simulated) signal.simulated = true;
 
             const primarySeries = analysis.series.find((s) => s.timeframe === "5m") ?? analysis.series[0];
             const intel = evaluateSignal(signal, analysis, primarySeries?.candles ?? [], {
@@ -301,7 +314,11 @@ export class AnalysisCoordinator {
             // emitted — across scalps, buy/sell limits and swings alike. Setups
             // that only MISS the optimizer bar are held as fallback candidates so
             // the signal feed is never empty even during quiet sessions.
-            if (this.config.winRateOptimizer) {
+            // Simulated (SIM) instruments are exempt: those are pure demo
+            // observation, never tradable or posted to Telegram, so demanding
+            // A-grade confluence would blank the demo feed entirely.
+            const simObserve = analysis.simulated && this.config.allowSimulatedSignals;
+            if (this.config.winRateOptimizer && !simObserve) {
               const gate = applyWinRateOptimizer(signal, analysis, conf, rr);
               signal.optimizerGate = {
                 passed: gate.pass,
@@ -320,6 +337,9 @@ export class AnalysisCoordinator {
       }
 
       const futures = this.futureEngine.generate(instrument, analysis);
+      if (analysis.simulated) {
+        for (const f of futures) f.simulated = true;
+      }
       snapshot.futureOpportunities.push(...futures);
     }
 
@@ -420,6 +440,20 @@ export class AnalysisCoordinator {
     return analysis;
   }
 
+  /**
+   * Simulated/observation instruments get a relaxed score floor so demo feeds
+   * (e.g. gold on SIM fallback) still demonstrate the pipeline. They are tagged
+   * SIM and excluded from history + Telegram, so quality of LIVE signals is
+   * unaffected. Live instruments always use the strict configured floor.
+   */
+  private scoreFloorFor(isLimit: boolean, analysis: InstrumentAnalysis): number {
+    const strict = isLimit ? this.config.minLimitScore : this.config.minSignalScore;
+    if (analysis.simulated && this.config.allowSimulatedSignals) {
+      return Math.max(25, strict * 0.5);
+    }
+    return strict;
+  }
+
   private buildScannerRow(
     instrument: Instrument,
     analysis: InstrumentAnalysis,
@@ -440,7 +474,7 @@ export class AnalysisCoordinator {
     const score = picked
       ? this.signalEngine.score(instrument, analysis, picked)
       : null;
-    const minForPicked = picked?.type.includes("LIMIT") ? this.config.minLimitScore : this.config.minSignalScore;
+    const minForPicked = picked ? this.scoreFloorFor(picked.type.includes("LIMIT"), analysis) : this.config.minSignalScore;
     const hasSetup = picked && (score ?? 0) >= minForPicked;
     return {
       symbol: instrument.symbol,
@@ -459,7 +493,8 @@ export class AnalysisCoordinator {
       status: hasSetup ? (picked!.type.includes("LIMIT") ? "WAITING" : "ACTIVE") : noTradeDraft?.noTrade ?? null,
       updatedAt: analysis.timestamp,
       noTradeReason: noTradeDraft?.noTrade ?? null,
-      confidenceFilter: picked ? this.gradeCandidate(analysis, picked) : undefined
+      confidenceFilter: picked ? this.gradeCandidate(analysis, picked) : undefined,
+      simulated: analysis.simulated
     };
   }
 

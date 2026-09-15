@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { DemoMarketDataProvider } from "../providers/demo";
-import { AnalysisCoordinator } from "./coordinator";
+import { AnalysisCoordinator, DEFAULT_ANALYSIS_CONFIG } from "./coordinator";
 
 describe("AnalysisCoordinator + DemoMarketDataProvider integration", () => {
   it("produces scanner rows and at least some signals/futures", async () => {
@@ -57,6 +57,32 @@ describe("AnalysisCoordinator + DemoMarketDataProvider integration", () => {
     for (const row of snapshot.scanner) {
       expect(row.simulated).toBe(true);
       expect(row.setup).toBeNull();
+    }
+  });
+
+  it("runs simulated instruments through the FULL pipeline when allowSimulatedSignals (SIM tagging)", async () => {
+    const provider = new DemoMarketDataProvider();
+    await provider.start();
+    const coordinator = new AnalysisCoordinator({
+      ...DEFAULT_ANALYSIS_CONFIG,
+      allowSimulatedSignals: true,
+    });
+    const snapshot = coordinator.analyze(provider);
+    provider.stop();
+
+    // SIM bypass: simulated instruments run the real engine now.
+    for (const row of snapshot.scanner) {
+      expect(row.simulated).toBe(true);
+      if (row.setup) expect(row.status).not.toBe("SIM");
+    }
+    for (const signal of snapshot.signals) {
+      expect(signal.simulated).toBe(true);
+      // Simulated/observation signals are exempt from the A-grade optimizer
+      // (demo demonstration, never tradable), so no gate is applied.
+      expect(signal.optimizerGate).toBeUndefined();
+    }
+    for (const f of snapshot.futureOpportunities) {
+      expect(f.simulated).toBe(true);
     }
   });
 

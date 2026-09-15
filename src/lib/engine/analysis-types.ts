@@ -191,6 +191,9 @@ export interface Signal {
     target: number;
     reasons: string[];
   };
+  /** True when the signal is derived from a simulated/demo feed and must not be
+   *  traded for real money (surface for testing only). */
+  simulated?: boolean;
 }
 
 export type SignalType =
@@ -222,6 +225,8 @@ export interface FutureOpportunity {
   createdAt: number;
   updatedAt: number;
   reason: string;
+  /** True when the opportunity is derived from a simulated/demo feed. */
+  simulated?: boolean;
 }
 
 export type FutureStatus =
