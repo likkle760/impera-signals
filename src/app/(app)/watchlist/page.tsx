@@ -12,6 +12,10 @@ import { Eye, Plus, Trash2, Star, ArrowUpRight } from "lucide-react";
 
 const KEY = "impera.watchlist.v1";
 
+/** Pre-seeded watchlist so priority markets (XAUUSD above all) are pinned on
+ *  first visit — the user's own list is never overwritten once they edit it. */
+const DEFAULT_WATCH = ["XAUUSD", "EURUSD", "GBPUSD", "XAGUSD"];
+
 const container = {
   hidden: { opacity: 0 },
   visible: { opacity: 1, transition: { staggerChildren: 0.07 } },
@@ -30,7 +34,13 @@ export default function WatchlistPage() {
   useEffect(() => {
     try {
       const raw = localStorage.getItem(KEY);
-      if (raw) setWatch(JSON.parse(raw));
+      if (raw && Array.isArray(JSON.parse(raw))) {
+        setWatch(JSON.parse(raw));
+      } else {
+        // First visit (or cleared list): seed with priority markets.
+        setWatch(DEFAULT_WATCH);
+        localStorage.setItem(KEY, JSON.stringify(DEFAULT_WATCH));
+      }
     } catch { /* ignore */ }
   }, []);
 

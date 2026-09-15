@@ -281,7 +281,7 @@ export class AnalysisCoordinator {
               analysis,
               rr,
               entrySideFvg,
-              { minConfidence: this.config.minConfidence ?? DEFAULT_MIN_CONFIDENCE }
+              { minConfidence: this.confidenceFloorFor(analysis) }
             );
 
             // risk/reward gate
@@ -446,12 +446,41 @@ export class AnalysisCoordinator {
    * SIM and excluded from history + Telegram, so quality of LIVE signals is
    * unaffected. Live instruments always use the strict configured floor.
    */
+  /**
+   * Simulated/observation instruments get a relaxed score floor so demo feeds
+   * (e.g. gold on SIM fallback) still demonstrate the pipeline. They are tagged
+   * SIM and excluded from history + Telegram, so quality of LIVE signals is
+   * unaffected. Live instruments always use the strict configured floor.
+   * Priority metals (XAUUSD etc.) get an even lower floor — the user's main
+   * market should surface nearly every scan in demo mode.
+   */
   private scoreFloorFor(isLimit: boolean, analysis: InstrumentAnalysis): number {
     const strict = isLimit ? this.config.minLimitScore : this.config.minSignalScore;
     if (analysis.simulated && this.config.allowSimulatedSignals) {
+      if (this.isPriorityMetal(analysis)) return Math.max(15, strict * 0.3);
       return Math.max(25, strict * 0.5);
     }
     return strict;
+  }
+
+  /**
+   * Same relaxation, applied to the confidence decision gate (default 70).
+   * Demo/SIM setups are untradeable and excluded from history + Telegram, so
+   * they only need to be demonstrative — priority metals like XAUUSD then
+   * surface regularly instead of ~2/14 days, while plain demo symbols keep the
+   * strict bar so the feed doesn't flood.
+   */
+  private confidenceFloorFor(analysis: InstrumentAnalysis): number {
+    const strict = this.config.minConfidence ?? DEFAULT_MIN_CONFIDENCE;
+    if (analysis.simulated && this.config.allowSimulatedSignals) {
+      if (this.isPriorityMetal(analysis)) return Math.max(40, strict * 0.6);
+      return strict;
+    }
+    return strict;
+  }
+
+  private isPriorityMetal(analysis: InstrumentAnalysis): boolean {
+    return analysis.assetClass === "metals" || this.config.prioritySymbols.includes(analysis.symbol);
   }
 
   private buildScannerRow(
@@ -513,7 +542,7 @@ export class AnalysisCoordinator {
       analysis,
       rr,
       entryFvgFor(analysis, draft.direction),
-      { minConfidence: this.config.minConfidence ?? DEFAULT_MIN_CONFIDENCE }
+      { minConfidence: this.confidenceFloorFor(analysis) }
     );
     return {
       total: conf.total,
