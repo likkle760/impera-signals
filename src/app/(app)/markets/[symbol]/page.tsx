@@ -3,15 +3,17 @@ import { useMemo, useState } from "react";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { useMarketState, useMarketStore } from "@/lib/hooks/use-market-store";
-import MarketChart from "@/components/MarketChart";
+import { DEFAULT_INSTRUMENTS } from "@/lib/instruments";
+import MarketChart, { ChartOverlay } from "@/components/MarketChart";
 import SignalCard from "@/components/SignalCard";
 import { decimalsFor } from "@/lib/formatting";
 import { formatPrice } from "@/lib/utils";
 import { TREND_COLOR, RISK_BADGE, DIRECTION_BG } from "@/components/ui/badges";
 import { PageHeader } from "@/components/ui";
 import { motion } from "framer-motion";
-import { ArrowLeft, Activity, Layers, TrendingUp, TrendingDown, MapPin, Gauge, Zap, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Activity, Layers, TrendingUp, TrendingDown, MapPin, Gauge, Zap, ShieldCheck, Waves } from "lucide-react";
 import type { Timeframe } from "@/lib/types";
+import type { InstrumentAnalysis } from "@/lib/engine/analysis-types";
 
 const TFS: Timeframe[] = ["1m", "3m", "5m", "15m", "30m", "1h", "4h"];
 
@@ -33,10 +35,32 @@ export default function MarketDetailPage({ params }: { params: { symbol: string 
 
   const analysis = state.snapshot.instruments[symbol];
   const candles = useMemo(() => store.getCandleSeries(symbol, tf)?.candles ?? [], [store, symbol, tf, state.lastAnalysis]);
-  const signal = state.snapshot.signals.find((s) => s.symbol === symbol);
-  const futures = state.snapshot.futureOpportunities.filter((f) => f.symbol === symbol);
+  const signals = useMemo(() => state.snapshot.signals.filter((s) => s.symbol === symbol), [state.snapshot.signals, symbol]);
+  const signal = signals[0];
+  const futures = useMemo(() => state.snapshot.futureOpportunities.filter((f) => f.symbol === symbol), [state.snapshot.futureOpportunities, symbol]);
 
-  if (!analysis && state.lastAnalysis > 0) return notFound();
+  const knownSymbol = DEFAULT_INSTRUMENTS.some((i) => i.enabled && i.symbol === symbol);
+  if (!analysis && state.lastAnalysis > 0 && !knownSymbol) return notFound();
+
+  const explanation = useMemo(() => (analysis ? buildExplanation(analysis) : []), [analysis]);
+
+  const overlays = useMemo<ChartOverlay[]>(() => {
+    const arr: ChartOverlay[] = [];
+    if (signal) {
+      arr.push({ price: signal.entry, color: signal.type.includes("BUY") ? "#10b981" : "#f43f5e", label: "ENTRY" });
+      arr.push({ price: signal.stopLoss, color: "#ef4444", dashed: true, label: "SL" });
+      signal.takeProfits.forEach((tp, i) => arr.push({ price: tp, color: "#34d399", dashed: true, label: `TP${i + 1}` }));
+    } else {
+      const f = futures.find((x) => x.status !== "INVALIDATED" && x.status !== "EXPIRED");
+      if (f) {
+        arr.push({ price: f.watchZone[0], color: "#f59e0b", dashed: true, label: "WATCH" });
+        arr.push({ price: f.watchZone[1], color: "#f59e0b", dashed: true });
+        arr.push({ price: f.stopLoss, color: "#ef4444", dashed: true, label: "SL" });
+      }
+    }
+    return arr;
+  }, [signal, futures]);
+
   const cash = decimalsFor(symbol);
 
   const regime = analysis?.trend.regime;
@@ -97,10 +121,10 @@ export default function MarketDetailPage({ params }: { params: { symbol: string 
                     </button>
                   ))}
                 </div>
-                <MarketChart candles={candles} timeframe={tf} analysis={analysis} />
+                <MarketChart candles={candles} timeframe={tf} analysis={analysis} overlays={overlays} />
                 <div className="text-[11px] text-terminal-muted mt-1.5 flex items-center gap-1.5">
                   <Gauge className="w-3 h-3 text-terminal-accent" />
-                  Entry / SL / TP shown on the active signal card. Lines: EMA 9/20/50, VWAP (dashed), S/R zones.
+                  Entry / SL / TP (signal) or WATCH zone + SL (future level) drawn on the chart. Lines: EMA 9/20/50, VWAP (dashed), S/R zones.
                 </div>
               </div>
             </div>
@@ -198,52 +222,182 @@ export default function MarketDetailPage({ params }: { params: { symbol: string 
               <Indicators analysis={analysis} cash={cash} />
             </section>
 
-            {/* Signal */}
+            {/* Why this read */}
             <section className="card p-4 panel-hover lg:col-span-2">
-              <h2 className="panel-title mb-3 flex items-center gap-1.5"><Zap className="w-3.5 h-3.5" /> ACTIVE SIGNAL</h2>
-              {signal ? (
-                <div className="max-w-md">
-                  <SignalCard signal={signal} decimals={cash} />
-                </div>
-              ) : (
-                <div className="empty-state py-8 border border-dashed border-terminal-border/70 rounded-xl">
-                  <div className="empty-icon text-4xl">◈</div>
-                  <div className="empty-title text-sm">NO HIGH-QUALITY SETUP</div>
-                  <div className="empty-desc">
-                    No confirmed setup on {symbol} right now. Reasons may include conflicting timeframes, excessive
-                    volatility, poor risk/reward, weak structure, large spread, or an unconfirmed setup.
-                  </div>
-                </div>
-              )}
+              <h2 className="panel-title mb-1 flex items-center gap-1.5"><Waves className="w-3.5 h-3.5" /> WHY THIS READ</h2>
+              <p className="text-sm text-terminal-text mb-3">{summaryFor(analysis, symbol)}</p>
+              <ul className="space-y-2">
+                {explanation.map((e, i) => (
+                  <li key={i} className="flex items-start gap-2.5 px-3 py-2 rounded-lg bg-terminal-panel2/60 border border-terminal-border/50 text-sm">
+                    <ExplainDot tone={e.tone} />
+                    <span className="text-terminal-textDim leading-snug">{e.text}</span>
+                  </li>
+                ))}
+              </ul>
             </section>
           </motion.div>
 
-          {futures.length > 0 && (
-            <motion.div variants={item} className="card p-4 panel-hover">
-              <h2 className="panel-title mb-3 flex items-center gap-1.5"><ShieldCheck className="w-3.5 h-3.5" /> FUTURE LEVELS</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {futures.map((f) => (
-                  <div key={f.id} className="panel-section p-3">
-                    <div className="flex justify-between">
-                      <span className={`badge ${f.kind.includes("BUY") ? DIRECTION_BG.BUY : DIRECTION_BG.SELL}`}>{f.kind}</span>
-                      <span className={`badge ${RISK_BADGE[f.riskLevel]}`}>{f.riskLevel}</span>
+          {/* Potential signals & entries */}
+          <motion.div variants={item} className="card p-4 panel-hover">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+              <h2 className="panel-title flex items-center gap-1.5"><Zap className="w-3.5 h-3.5" /> POTENTIAL SIGNALS &amp; ENTRIES</h2>
+              {signals.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <span className="badge badge-success">{signals.length} active</span>
+                  <span className="badge badge-neutral">{futures.length} watch levels</span>
+                </div>
+              )}
+            </div>
+
+            {signals.length > 0 && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                {signals.map((s) => (
+                  <div key={s.id} className="rounded-xl border border-terminal-border/50 p-3 bg-terminal-panel2/40">
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <span className={`badge ${s.type.includes("BUY") ? DIRECTION_BG.BUY : DIRECTION_BG.SELL}`}>{s.type}</span>
+                      <span className="text-[11px] text-terminal-muted">{s.status}</span>
                     </div>
-                    <div className="text-xs mt-2 font-mono">
-                      Watch: <span className="text-terminal-text">{formatPrice(f.watchZone[0], cash)} – {formatPrice(f.watchZone[1], cash)}</span>
-                    </div>
-                    <div className="text-xs text-terminal-muted mt-1 flex items-center gap-2">
-                      <span className={`w-1.5 h-1.5 rounded-full ${f.status === "APPROACHING" ? "bg-sky-400 animate-pulse" : "bg-terminal-muted"}`} />
-                      Status: <span className={f.status === "APPROACHING" ? "text-sky-300" : "text-terminal-textDim"}>{f.status}</span>
-                    </div>
+                    <SignalCard signal={s} decimals={cash} />
                   </div>
                 ))}
               </div>
-            </motion.div>
-          )}
+            )}
+
+            {signals.length === 0 && futures.length === 0 ? (
+              <div className="empty-state py-8 border border-dashed border-terminal-border/70 rounded-xl">
+                <div className="empty-icon text-4xl">◈</div>
+                <div className="empty-title text-sm">NO HIGH-QUALITY SETUP</div>
+                <div className="empty-desc">
+                  No confirmed setup on {symbol} right now. Reasons may include conflicting timeframes, excessive
+                  volatility, poor risk/reward, weak structure, large spread, or an unconfirmed price reaction.
+                </div>
+              </div>
+            ) : null}
+
+            {futures.length > 0 && (
+              <>
+                <h3 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-terminal-muted mb-2">
+                  <ShieldCheck className="w-3.5 h-3.5 text-terminal-accent" /> PRE-STAGED WATCH LEVELS ({futures.length})
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {futures.map((f) => (
+                    <div key={f.id} className="panel-section p-3">
+                      <div className="flex justify-between gap-2 flex-wrap">
+                        <span className={`badge ${f.kind.includes("BUY") ? DIRECTION_BG.BUY : DIRECTION_BG.SELL}`}>{f.kind}</span>
+                        <span className={`badge ${RISK_BADGE[f.riskLevel]}`}>{f.riskLevel}</span>
+                      </div>
+                      <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs font-mono">
+                        <LevelRow label="Watch" value={formatPrice(f.watchZone[0], cash) + " – " + formatPrice(f.watchZone[1], cash)} accent="text-amber-300" />
+                        <LevelRow label="Stop" value={formatPrice(f.stopLoss, cash)} accent="text-rose-300" />
+                        <LevelRow label="TP1" value={formatPrice(f.takeProfits[0], cash)} accent="text-emerald-300" />
+                        <LevelRow label="TP2" value={formatPrice(f.takeProfits[1], cash)} accent="text-emerald-300" />
+                        <LevelRow label="TP3" value={formatPrice(f.takeProfits[2], cash)} accent="text-emerald-300" />
+                        <LevelRow label="Confidence" value={f.confidence + "%"} accent="text-sky-300" />
+                      </div>
+                      <p className="text-[11px] text-terminal-muted mt-2 leading-snug">{f.reason}</p>
+                      <div className="flex items-center gap-2 mt-2 text-[11px]">
+                        <span className={`w-1.5 h-1.5 rounded-full ${f.status === "APPROACHING" ? "bg-sky-400 animate-pulse" : "bg-terminal-muted"}`} />
+                        <span className="text-terminal-muted">Status</span>
+                        <span className={f.status === "APPROACHING" ? "text-sky-300" : "text-terminal-textDim"}>{f.status}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </motion.div>
         </>
       )}
     </motion.div>
   );
+}
+
+function LevelRow({ label, value, accent }: { label: string; value: string; accent: string }) {
+  return (
+    <div className="flex items-center justify-between py-0.5">
+      <span className="text-terminal-muted">{label}</span>
+      <span className={accent}>{value}</span>
+    </div>
+  );
+}
+
+function ExplainDot({ tone }: { tone: "bull" | "bear" | "neutral" | "info" }) {
+  const cls =
+    tone === "bull" ? "bg-emerald-400 text-emerald-900"
+    : tone === "bear" ? "bg-rose-400 text-rose-900"
+    : tone === "info" ? "bg-sky-400 text-sky-900"
+    : "bg-slate-400 text-slate-900";
+  return (
+    <span className={`w-4 h-4 rounded-full flex-shrink-0 mt-0.5 flex items-center justify-center ${cls}`}>
+      {tone === "bull" ? "▲" : tone === "bear" ? "▼" : tone === "info" ? "●" : "—"}
+    </span>
+  );
+}
+
+function summaryFor(analysis: InstrumentAnalysis, symbol: string): string {
+  const r = analysis.trend.regime;
+  const mom = analysis.trend.momentum;
+  return `${symbol} is ${r === "BULLISH" ? "trending higher" : r === "BEARISH" ? "trending lower" : "trading in a range"} (${r})${
+    analysis.trend.strength > 0 ? ` with ${analysis.trend.strength}/100 trend strength` : ""
+  }${analysis.trend.higherTimeframe !== "NEUTRAL" ? `, holding a ${analysis.trend.higherTimeframe.toLowerCase()} read on the higher timeframes` : ""}. Momentum is ${
+    mom >= 60 ? "hot" : mom <= 40 ? "subdued" : "neutral"
+  } during the ${analysis.session} session. Score: ${analysis.trend.momentum}/100 momentum, ${analysis.trend.volatilityScore}/100 volatility.${
+    analysis.simulated ? " Data is SIMULATED (demo) — never for real-money trading." : ""
+  }`;
+}
+
+function buildExplanation(a: InstrumentAnalysis): { tone: "bull" | "bear" | "neutral" | "info"; text: string }[] {
+  const out: { tone: "bull" | "bear" | "neutral" | "info"; text: string }[] = [];
+  const { trend, structure, liquidity, fvg, orderBlocks } = a;
+
+  if (trend.directionalBias === "BUY") {
+    out.push({ tone: "bull", text: "Directional bias is LONG — we only chase entries that build higher into resistance, never buys into a falling market." });
+  } else if (trend.directionalBias === "SELL") {
+    out.push({ tone: "bear", text: "Directional bias is SHORT — we favour positions that press lower into support and avoid fading the trend." });
+  } else {
+    out.push({ tone: "neutral", text: "No directional bias — price is ranging; we react only on a confirmed break/CHoCH, not guesses at tops/bottoms." });
+  }
+
+  if (trend.higherTimeframe.includes("BULLISH")) {
+    out.push({ tone: "bull", text: `Higher-timeframe trend is ${trend.higherTimeframe.toLowerCase()} — new longs align with the bigger picture.` });
+  } else if (trend.higherTimeframe.includes("BEARISH")) {
+    out.push({ tone: "bear", text: `Higher-timeframe trend is ${trend.higherTimeframe.toLowerCase()} — shorts align with the bigger picture.` });
+  } else {
+    out.push({ tone: "neutral", text: "Higher-timeframe read is flat — stay patient until structure confirms a new leg." });
+  }
+
+  if (structure.bos) out.push({ tone: "info", text: "Break of structure (BOS) is confirmed — momentum favours the trend direction." });
+  if (structure.choch) out.push({ tone: "info", text: "Change of character (CHoCH) detected — a short-term reversal is in play; entries respect the new leg." });
+  if (structure.consolidation) out.push({ tone: "neutral", text: "Market is consolidating — the cleanest entries usually arrive on the first impulse out of the range." });
+
+  const mom = trend.momentum;
+  out.push({ tone: mom >= 60 ? "bull" : mom <= 40 ? "bear" : "neutral", text: `Momentum is ${mom >= 60 ? "strong" : mom <= 40 ? "weak" : "moderate"} (${mom}/100).` });
+
+  const eqLows = liquidity.equalLows.length;
+  const eqHighs = liquidity.equalHighs.length;
+  const sweeps = liquidity.sweeps.length;
+  if (eqLows > 0) out.push({ tone: "bull", text: `${eqLows} equal-low${eqLows > 1 ? "s" : ""} below offer liquidity that price may sweep before a rally.` });
+  if (eqHighs > 0) out.push({ tone: "bear", text: `${eqHighs} equal-high${eqHighs > 1 ? "s" : ""} above hold sell-side liquidity that price may tap before a drop.` });
+  if (sweeps > 0) out.push({ tone: "info", text: `${sweeps} liquidity sweep${sweeps > 1 ? "s" : ""} detected on the current window — classic stop-hunt before continuation.` });
+
+  const unfilledBull = fvg.filter((g) => g.type === "bullish" && !g.filled);
+  const unfilledBear = fvg.filter((g) => g.type === "bearish" && !g.filled);
+  if (unfilledBull.length > 0) out.push({ tone: "bull", text: `${unfilledBull.length} unfilled bullish FVG below provide a discount entry target for longs.` });
+  if (unfilledBear.length > 0) out.push({ tone: "bear", text: `${unfilledBear.length} unfilled bearish FVG above act as premium regions for shorts.` });
+
+  const demand = orderBlocks?.bullish?.length ?? 0;
+  const supply = orderBlocks?.bearish?.length ?? 0;
+  if (demand > 0 || supply > 0) {
+    out.push({ tone: "info", text: `${demand} demand and ${supply} supply order-blocks frame the canvas — price reacts around these zones.` });
+  }
+
+  const spreadBps = (a.spread / Math.max(a.price, 1e-9)) * 1e4;
+  if (spreadBps > 6) out.push({ tone: "neutral", text: `Spread is wide (${spreadBps.toFixed(1)} pips) — slippage eats edge; prefer limit entries.` });
+  if (trend.volatilityScore > 60) out.push({ tone: "neutral", text: `Volatility is elevated (${trend.volatilityScore}/100) — expect wider swings; size smaller.` });
+
+  if (a.simulated) out.push({ tone: "neutral", text: "This data feed is SIMULATED (demo). Setups here are for observation only — never trade them with real money." });
+
+  return out.slice(0, 10);
 }
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {

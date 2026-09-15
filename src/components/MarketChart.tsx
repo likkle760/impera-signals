@@ -5,14 +5,27 @@ import type { Candle, Timeframe } from "@/lib/types";
 import type { InstrumentAnalysis } from "@/lib/engine/analysis-types";
 import { ema } from "@/lib/engine/indicators";
 
+export interface ChartOverlay {
+  /** price level to draw */
+  price: number;
+  /** hex color for the line */
+  color: string;
+  /** dashed when set (lightweight-charts LineStyle 3) */
+  dashed?: boolean;
+  /** optional label marker (shape depends on price vs latest close) */
+  label?: string;
+}
+
 export default function MarketChart({
   candles,
   timeframe,
-  analysis
+  analysis,
+  overlays
 }: {
   candles: Candle[];
   timeframe: Timeframe;
   analysis: InstrumentAnalysis | null;
+  overlays?: ChartOverlay[];
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -127,7 +140,33 @@ export default function MarketChart({
         lineRefs.current.push(ln);
       }
     }
-  }, [analysis, candles]);
+
+    // Entry / SL / TP / watch-zone overlays from the active setup
+    if (overlays?.length) {
+      const lastClose = candles[candles.length - 1]?.close;
+      for (const o of overlays) {
+        if (!isFinite(o.price)) continue;
+        const ln = chartRef.current!.addLineSeries({
+          color: o.color,
+          lineWidth: 1,
+          priceLineVisible: false,
+          lineStyle: o.dashed ? 3 : 0
+        });
+        ln.setData(times.map((t) => ({ time: t as any, value: o.price })));
+        lineRefs.current.push(ln);
+        if (o.label && lastClose != null) {
+          const above = o.price >= lastClose;
+          ln.setMarkers([{
+            time: times[times.length - 1] as any,
+            text: o.label,
+            position: above ? "aboveBar" : "belowBar",
+            shape: above ? "arrowDown" : "arrowUp",
+            color: o.color
+          }]);
+        }
+      }
+    }
+  }, [analysis, candles, overlays]);
 
   return <div ref={containerRef} className="w-full" />;
 }
