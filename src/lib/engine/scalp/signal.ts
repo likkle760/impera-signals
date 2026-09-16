@@ -14,6 +14,7 @@ import {
   classifyRegime
 } from "../swing/indicators";
 import { getCurrentSession } from "../session";
+import { scalpConfigForSymbol } from "./../market/asset-config";
 import type { SwingZone } from "../swing/types";
 import type { ScalpSignal, ScalpVerdict } from "./types";
 
@@ -55,7 +56,7 @@ export class ScalpSignalEngine {
   }
 
   evaluate(input: ScalpAnalysisInput): ScalpSignal {
-    const cfg = scalpConfigForAssetClass(this.config, input.assetClass);
+    const cfg = scalpConfigForSymbol(scalpConfigForAssetClass(this.config, input.assetClass), input.symbol, input.assetClass);
     const { context, setup, entry, spread, price, now } = input;
 
     const ctx = context.length - 1;

@@ -5,6 +5,7 @@ import type {
   AnalysisSnapshot,
   FutureOpportunity,
   InstrumentAnalysis,
+  RejectedSignal,
   ScannerRow,
   Signal
 } from "./analysis-types";
@@ -29,6 +30,21 @@ import type { FairValueGap } from "./analysis-types";
 import { scoreConfidence, confidenceBand, gradeLabel } from "./confidence";
 import { WIN_RATE_TARGET, applyWinRateOptimizer } from "./win-rate-optimizer";
 import { MIN_EV_SAMPLE, expectedValueRounded } from "./expected-value";
+import type { HistoryEntry } from "./history";
+import { PortfolioRiskEngine, type RiskDecision } from "./risk/portfolio-risk";
+import { resolveRiskLimits } from "./risk/config";
+import { logSignalDecision, logSignalRejected } from "./decision-log";
+
+/** Portfolio context the store feeds each scan so the risk layer sees the whole
+ *  account (open recommendations + trade ledger), not just one symbol. */
+export interface AnalyzeContext {
+  /** trade ledger (won/lost history) — drives daily-loss/drawdown/cooldown. */
+  history?: HistoryEntry[];
+  /** the previous scan's approved signals — drives correlations/open-risk. */
+  previousOpen?: Signal[];
+  /** wall-clock now (defaults to Date.now() at scan start). */
+  now?: number;
+}
 
 export interface AnalysisConfig {
   minSignalScore: number;
@@ -110,6 +126,7 @@ export class AnalysisCoordinator {
   private risk = new RiskEngine();
   private signalEngine: SignalEngine;
   private futureEngine = new FutureOpportunityEngine();
+  private portfolioRisk: PortfolioRiskEngine;
 
   /** Derived-analysis cache: heavy per-symbol calculations (indicators, market
    *  structure, trend, liquidity, FVG, S/R) are reused across scans while the
@@ -128,9 +145,11 @@ export class AnalysisCoordinator {
       enabledModes: { scalp: config.scalpingMode, dayTrade: config.dayTradeMode, swing: config.swingMode },
       moreSignals: config.moreSignals
     });
+    this.portfolioRisk = new PortfolioRiskEngine(resolveRiskLimits());
   }
 
-  analyze(provider: MarketDataProvider): AnalysisSnapshot {
+  analyze(provider: MarketDataProvider, ctx: AnalyzeContext = {}): AnalysisSnapshot {
+    const now = ctx.now ?? Date.now();
     const instruments = provider.getSymbols().filter((i) =>
       this.config.enabledInstruments.length === 0
         ? true
@@ -143,11 +162,12 @@ export class AnalysisCoordinator {
     });
 
     const snapshot: AnalysisSnapshot = {
-      timestamp: Date.now(),
+      timestamp: now,
       instruments: {},
       signals: [],
       futureOpportunities: [],
-      scanner: []
+      scanner: [],
+      rejected: []
     };
 
     // Candidates that passed the base gates but missed the optimizer's A bar.
@@ -318,6 +338,7 @@ export class AnalysisCoordinator {
             // observation, never tradable or posted to Telegram, so demanding
             // A-grade confluence would blank the demo feed entirely.
             const simObserve = analysis.simulated && this.config.allowSimulatedSignals;
+            let optimizerPassed = true;
             if (this.config.winRateOptimizer && !simObserve) {
               const gate = applyWinRateOptimizer(signal, analysis, conf, rr);
               signal.optimizerGate = {
@@ -325,10 +346,61 @@ export class AnalysisCoordinator {
                 target: gate.target,
                 reasons: gate.reasons
               };
-              if (!gate.pass) {
-                optimizerFallback.push(signal);
-                continue; // below the A bar — kept for fallback only (§15.5)
-              }
+              optimizerPassed = gate.pass;
+            }
+
+            // ── PORTFOLIO RISK ENGINE (§ RISK: sizing, halts, cooldown) ──
+            // Every trade that clears the strategy gates is then sized against the
+            // real account and checked against the portfolio: max open trades, max
+            // total open risk, correlated exposure, daily risk budget, daily loss,
+            // drawdown, consecutive-loss cooldown, per-symbol re-entry cooldown,
+            // stale data, spread-to-stop and abnormal volatility. REJECTED trades
+            // are surfaced (never dropped silently) and never committed to the
+            // live ledger or Telegram.
+            const riskDecision = this.evaluatePortfolioRisk(signal, analysis, snapshot, ctx, now);
+            signal.riskAnalysis = riskAnalysisFrom(signal, riskDecision);
+            logSignalDecision({
+              symbol: signal.symbol,
+              direction: signal.direction,
+              type: signal.type,
+              confidence: signal.confidence,
+              riskReward: signal.riskReward,
+              entry: signal.entry,
+              stopLoss: signal.stopLoss,
+              tp1: signal.takeProfits[0],
+              simulated: signal.simulated,
+              risk: riskDecision
+            });
+
+            if (riskDecision.decision === "REJECTED") {
+              snapshot.rejected!.push(rejectedSignalFrom(signal, riskDecision));
+              logSignalRejected(
+                {
+                  symbol: signal.symbol,
+                  direction: signal.direction,
+                  type: signal.type,
+                  confidence: signal.confidence,
+                  riskReward: signal.riskReward,
+                  entry: signal.entry,
+                  stopLoss: signal.stopLoss,
+                  tp1: signal.takeProfits[0],
+                  simulated: signal.simulated
+                },
+                riskDecision.problems
+              );
+              continue;
+            }
+
+            // Commit the NEW trade's risk to the rolling 24h daily budget once.
+            // Re-emitted setups (same stable id, already open) must not double-count.
+            const alreadyOpen = (ctx.previousOpen ?? []).some((o) => o.id === signal.id);
+            if (!alreadyOpen) {
+              this.portfolioRisk.commit(signal.id, signal.symbol, riskDecision.riskPercent, now);
+            }
+
+            if (!optimizerPassed) {
+              optimizerFallback.push(signal);
+              continue; // below the A bar — kept for fallback only (§15.5)
             }
 
             snapshot.signals.push(signal);
@@ -481,6 +553,42 @@ export class AnalysisCoordinator {
 
   private isPriorityMetal(analysis: InstrumentAnalysis): boolean {
     return analysis.assetClass === "metals" || this.config.prioritySymbols.includes(analysis.symbol);
+  }
+
+  /** Run the portfolio risk engine on a fully-drafted signal (post all strategy
+   *  gates). Returns the RiskDecision; the caller attaches `riskAnalysis` and
+   *  routes APPROVED/REJECTED accordingly. */
+  private evaluatePortfolioRisk(
+    signal: Signal,
+    analysis: InstrumentAnalysis,
+    snapshot: AnalysisSnapshot,
+    ctx: AnalyzeContext,
+    now: number
+  ): RiskDecision {
+    const snapshotPrices: Record<string, { price: number }> = {};
+    for (const [s, a] of Object.entries(snapshot.instruments)) {
+      snapshotPrices[s] = { price: a.price };
+    }
+    return this.portfolioRisk.evaluate({
+      symbol: signal.symbol,
+      assetClass: signal.assetClass,
+      name: signal.name,
+      direction: signal.direction,
+      type: signal.type,
+      entry: signal.entry,
+      stopLoss: signal.stopLoss,
+      takeProfits: signal.takeProfits,
+      spread: analysis.spread,
+      price: analysis.price,
+      atr: analysis.atr,
+      volatilityScore: analysis.trend.volatilityScore,
+      quoteTimestamp: analysis.timestamp,
+      now,
+      simulated: !!analysis.simulated,
+      snapshot: snapshotPrices,
+      previousOpen: ctx.previousOpen ?? [],
+      history: ctx.history ?? []
+    });
   }
 
   private buildScannerRow(
@@ -693,4 +801,56 @@ function computeVolatilityScore(atr: number, price: number): number {
   if (pct > 0.06) return 50;
   if (pct > 0.03) return 30;
   return 15;
+}
+
+/** Attach the risk engine's verdict to the signal (all fields, transparent). */
+function riskAnalysisFrom(
+  signal: Signal,
+  d: RiskDecision
+): NonNullable<Signal["riskAnalysis"]> {
+  return {
+    decision: d.decision,
+    reasons:
+      d.decision === "APPROVED"
+        ? ["Approved by portfolio risk engine.", ...d.notes]
+        : d.problems,
+    riskPercent: d.riskPercent,
+    riskAmount: d.riskAmount,
+    positionSize: d.positionSize,
+    perLotRiskUSD: d.perLotRiskUSD,
+    projectedOpenRiskPct: d.projectedOpenRiskPct,
+    correlatedExposurePct: d.correlatedExposurePct,
+    openTrades: d.openTrades,
+    maxOpenTrades: d.maxOpenTrades,
+    maxDailyRiskRemainingPct: d.maxDailyRiskRemainingPct,
+    dailyLossPct: d.dailyLossPct,
+    drawdownPct: d.drawdownPct,
+    cooldownActive: d.cooldownActive
+  };
+}
+
+/** Convert a risk-rejected signal into a displayable REJECTED record. */
+function rejectedSignalFrom(signal: Signal, d: RiskDecision): RejectedSignal {
+  return {
+    id: signal.id,
+    symbol: signal.symbol,
+    name: signal.name,
+    assetClass: signal.assetClass,
+    type: signal.type,
+    direction: signal.direction,
+    entry: signal.entry,
+    entryZone: signal.entryZone,
+    stopLoss: signal.stopLoss,
+    takeProfits: signal.takeProfits,
+    riskReward: signal.riskReward,
+    confidence: signal.confidence,
+    riskLevel: signal.riskLevel,
+    setupName: signal.setupName,
+    reason: signal.reason,
+    createdAt: signal.createdAt,
+    session: signal.session,
+    simulated: signal.simulated,
+    rejectionReasons:
+      d.problems.length > 0 ? d.problems : ["Blocked by the portfolio risk engine."]
+  };
 }

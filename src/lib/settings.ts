@@ -24,6 +24,16 @@ export interface UserSettings {
   propDailyLossPct: number;
   propRiskPct: number;
   propConsistencyCap: number;
+  /** Portfolio risk limits (driven by the risk engine — discipline, NOT promises). */
+  riskMaxOpenTrades: number;
+  riskMaxTotalOpenRiskPct: number;
+  riskMaxCorrelatedRiskPct: number;
+  riskMaxDailyRiskPct: number;
+  riskMaxDrawdownPct: number;
+  riskMaxConsecutiveLosses: number;
+  riskCooldownMinutes: number;
+  riskMaxSpreadToStopPct: number;
+  riskMaxVolatilityScore: number;
   /** WIN-RATE OPTIMIZER: prefers A-grade (85+) full-confluence setups and biases
    *  the engine toward an 80%+ historical hit-rate on emitted signals — win rate is a
    *  selectivity target, NOT a profit guarantee. Default ON. */
@@ -46,12 +56,21 @@ export const DEFAULT_SETTINGS: UserSettings = {
   dataMode: "live",
   telegramEnabled: true,
   telegramMaxPerScan: 1,
-  moreSignals: true,
+  moreSignals: false,
   propAccountSize: 10000,
   propMaxLossPct: 10,
   propDailyLossPct: 5,
   propRiskPct: 0.5,
   propConsistencyCap: 0.5,
+  riskMaxOpenTrades: 4,
+  riskMaxTotalOpenRiskPct: 2,
+  riskMaxCorrelatedRiskPct: 1.5,
+  riskMaxDailyRiskPct: 2,
+  riskMaxDrawdownPct: 10,
+  riskMaxConsecutiveLosses: 3,
+  riskCooldownMinutes: 60,
+  riskMaxSpreadToStopPct: 0.25,
+  riskMaxVolatilityScore: 70,
   winRateOptimizer: true,
   perfMode: false
 };

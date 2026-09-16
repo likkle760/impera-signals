@@ -53,6 +53,9 @@ export class MarketStore {
   private tickListeners = new Set<() => void>();
 
   private previousSignals = new Map<string, Signal>();
+  /** Previous scan's approved live signals — the portfolio-risk layer reads
+   *  this to compute open risk, correlated exposure and open-trade counts. */
+  private previousApproved: Signal[] = [];
 
   private telegramSentThisScan = 0;
   private swingTelegramSentThisScan = 0;
@@ -178,7 +181,11 @@ export class MarketStore {
     this.telegramLastScanKey = `${start}`;
     this.telegramSentThisScan = 0;
     this.swingTelegramSentThisScan = 0;
-    const snapshot = this.coordinator.analyze(this.provider);
+    const snapshot = this.coordinator.analyze(this.provider, {
+      history: this.state.history,
+      previousOpen: this.previousApproved,
+      now: start
+    });
 
     const now = Date.now();
     const session = Object.values(snapshot.instruments)[0]?.session ?? "";
@@ -192,6 +199,7 @@ export class MarketStore {
 
     const history = this.updateHistory(snapshot.signals);
     this.setState({ history });
+    this.previousApproved = snapshot.signals.filter((s) => !s.simulated);
   }
 
   private updateHistory(allSignals: Signal[]): HistoryEntry[] {
@@ -201,6 +209,33 @@ export class MarketStore {
     let history = [...this.state.history];
     // terminal entries we already have stay; remove active entries that no longer exist
     const activeIds = new Set(newSignals.map((s) => s.id));
+
+    // ── RESOLVE LIVE OUTCOMES (§ history — fixed by stable signal IDs) ──
+    // Previously-tracked (this-scan-old or older) live signals are compared
+    // against the CURRENT price each scan. Once price crosses TP1 or the SL the
+    // position settles as won/lost in the ledger. Stable bucketed ids mean the
+    // same setup keeps its identity across scans — the old random ids made this
+    // transition impossible, so the ledger never recorded wins/losses.
+    for (const [id, prev] of this.previousSignals) {
+      if (prev.status === "TP1 HIT" || prev.status === "SL HIT") continue;
+      if (!activeIds.has(id)) continue; // setup no longer live — don't invent outcomes
+      const inst = this.state.snapshot.instruments[prev.symbol];
+      const price = inst?.price ?? prev.entry;
+      const terminal = priceOutcome(prev, price);
+      if (!terminal) continue;
+      const won = terminal === "TP1 HIT";
+      history = upsertHistory(history, {
+        ...prev,
+        status: terminal,
+        updatedAt: Date.now(),
+        outcome: won ? "won" : "lost",
+        resultNote: won ? "TP1 reached" : "Stop loss hit"
+      });
+      if (won && loadSettings().telegramEnabled) {
+        const exit = prev.takeProfits[0];
+        sendTelegram(formatWinMessage(prev, exit, 0)).catch(() => {});
+      }
+    }
 
     for (const sig of newSignals) {
       const prev = this.previousSignals.get(sig.id);
@@ -271,4 +306,27 @@ export class MarketStore {
     this.lastTelegramSentAt = now;
     sendTelegram(formatSignalMessage(sig)).catch(() => {});
   }
+}
+
+/**
+ * Resolve whether a live (non-limit) signal's price has reached its TP1 or SL.
+ * WAITING/limit orders are never resolved from price alone (they need an entry
+ * fill first), and non-numeric prices are ignored. Returns the terminal status
+ * or null while the trade is still open.
+ */
+function priceOutcome(sig: Signal, price: number): "TP1 HIT" | "SL HIT" | null {
+  if (!sig || sig.type.includes("LIMIT")) return null;
+  if (!Number.isFinite(price) || price <= 0) return null;
+  const entry = sig.entry;
+  const sl = sig.stopLoss;
+  const tp1 = sig.takeProfits?.[0];
+  if (!Number.isFinite(entry) || !Number.isFinite(sl) || !Number.isFinite(tp1)) return null;
+  if (sig.direction === "BUY") {
+    if (price <= sl) return "SL HIT";
+    if (price >= tp1) return "TP1 HIT";
+  } else {
+    if (price >= sl) return "SL HIT";
+    if (price <= tp1) return "TP1 HIT";
+  }
+  return null;
 }

@@ -62,14 +62,20 @@ export function isGoldSymbol(symbol: string): boolean {
 /**
  * Apply gold-specific overrides to a swing config (if the symbol is XAUUSD).
  * Falls through to the engine's own asset-class merge otherwise.
+ * The merges are DEEP — the gold risk overrides are deep-partials and would
+ * otherwise drop keys the engine relies on (tp1R, tp2R, stopMaxAtr, …).
  */
 export function swingConfigForSymbol(
   config: typeof DEFAULT_SWING_CONFIG,
   symbol: string,
   assetClass: string
 ): SwingConfig {
-  if (isGoldSymbol(symbol)) {
-    return { ...config, ...(XAUUSD_CONFIG.swing as object), assetClass: config.assetClass } as SwingConfig;
+  if (isGoldSymbol(symbol) && XAUUSD_CONFIG.swing) {
+    return {
+      ...config,
+      assetClass: config.assetClass,
+      ...deepMerge<SwingConfig>(config, XAUUSD_CONFIG.swing as Record<string, unknown>)
+    };
   }
   return config;
 }
@@ -80,8 +86,26 @@ export function scalpConfigForSymbol(
   symbol: string,
   assetClass: string
 ): ScalpConfig {
-  if (isGoldSymbol(symbol)) {
-    return { ...config, ...(XAUUSD_CONFIG.scalp as object), assetClass: config.assetClass } as ScalpConfig;
+  if (isGoldSymbol(symbol) && XAUUSD_CONFIG.scalp) {
+    return {
+      ...config,
+      assetClass: config.assetClass,
+      ...deepMerge<ScalpConfig>(config, XAUUSD_CONFIG.scalp as Record<string, unknown>)
+    };
   }
   return config;
+}
+
+/** Recursively merge override values onto `base`, preserving omitted keys. */
+function deepMerge<T>(base: T, override: Record<string, unknown>): Partial<T> {
+  const out: Record<string, unknown> = { ...(base as Record<string, unknown>) };
+  for (const [k, v] of Object.entries(override ?? {})) {
+    const bv = (base as Record<string, unknown>)[k];
+    out[k] = isPlainObject(v) && isPlainObject(bv) ? deepMerge(bv, v) : v;
+  }
+  return out as Partial<T>;
+}
+
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+  return !!v && typeof v === "object" && !Array.isArray(v);
 }

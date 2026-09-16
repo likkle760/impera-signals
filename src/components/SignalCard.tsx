@@ -15,8 +15,12 @@ export default function SignalCard({
   compact?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
+  const [showRisk, setShowRisk] = useState(false);
   const cash = decimals;
   const d = signal.direction;
+
+  const risk = signal.riskAnalysis;
+  const riskMoney = risk ? formatMoney(risk.riskAmount) : "";
 
   const copy = () => {
     const text = new SignalFormatter().format(signal, decimals);
@@ -117,6 +121,115 @@ export default function SignalCard({
           <div className="text-[10px] text-terminal-muted uppercase">Reason</div>
           <p className="text-xs text-gray-300 leading-snug">{signal.reason}</p>
         </div>
+
+        {risk && (
+          <div className="mt-2 bg-black/30 border border-sky-500/20 rounded overflow-hidden">
+            <button
+              onClick={() => setShowRisk(!showRisk)}
+              className="w-full flex items-center justify-between px-2 py-1.5 hover:bg-sky-500/5"
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-terminal-muted uppercase">Risk Engine</span>
+                {risk.decision === "APPROVED" ? (
+                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300">APPROVED</span>
+                ) : (
+                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300">REJECTED</span>
+                )}
+                {risk.positionSize && (
+                  <span className="text-[10px] font-mono text-sky-300 hidden sm:inline">
+                    {risk.riskPercent}% · {riskMoney} · {risk.positionSize.label}
+                  </span>
+                )}
+              </div>
+              <span className="text-terminal-muted text-xs">{showRisk ? "▲" : "▼"}</span>
+            </button>
+            {showRisk && (
+              <div className="px-2 pb-2">
+                {risk.positionSize && (
+                  <div className="grid grid-cols-3 gap-2 mt-0.5 text-[11px]">
+                    <div>
+                      <div className="text-[9px] text-terminal-muted uppercase">Risk/trade</div>
+                      <div className="font-mono text-white">{risk.riskPercent}%</div>
+                    </div>
+                    <div>
+                      <div className="text-[9px] text-terminal-muted uppercase">Risk $</div>
+                      <div className="font-mono text-white">{riskMoney}</div>
+                    </div>
+                    <div>
+                      <div className="text-[9px] text-terminal-muted uppercase">Position</div>
+                      <div className="font-mono text-sky-300">{risk.positionSize.label}</div>
+                    </div>
+                  </div>
+                )}
+                <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 mt-1.5 text-[10px]">
+                  <div className="flex justify-between">
+                    <span className="text-terminal-muted">Open trades</span>
+                    <span className="font-mono text-white">{risk.openTrades}/{risk.maxOpenTrades}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-terminal-muted">Projected open risk</span>
+                    <span className="font-mono text-white">{risk.projectedOpenRiskPct.toFixed(2)}%</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-terminal-muted">Correlated exposure</span>
+                    <span className="font-mono text-white">{risk.correlatedExposurePct.toFixed(2)}%</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-terminal-muted">Daily risk left</span>
+                    <span className={`font-mono ${risk.maxDailyRiskRemainingPct < 0.5 ? "text-rose-300" : "text-white"}`}>
+                      {risk.maxDailyRiskRemainingPct.toFixed(2)}%
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-terminal-muted">Daily loss</span>
+                    <span className={`font-mono ${risk.dailyLossPct >= 5 ? "text-rose-300" : "text-white"}`}>
+                      {risk.dailyLossPct.toFixed(2)}%
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-terminal-muted">Drawdown</span>
+                    <span className={`font-mono ${risk.drawdownPct >= 10 ? "text-rose-300" : "text-white"}`}>
+                      {risk.drawdownPct.toFixed(2)}%
+                    </span>
+                  </div>
+                </div>
+                {risk.cooldownActive && (
+                  <div className="mt-1 text-[10px] font-semibold text-amber-300">Cooldown active</div>
+                )}
+                {risk.reasons.length > 0 && (
+                  <ul className="mt-1.5 space-y-0.5">
+                    {risk.reasons.map((r, i) => (
+                      <li key={i} className="text-[10px] leading-snug text-gray-300">· {r}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {!risk && signal.universeConfidence && (
+          <div className="mt-2 flex items-center justify-between bg-black/30 border border-cyan-500/20 rounded px-2 py-1">
+            <div className="text-[10px] text-terminal-muted uppercase">Confidence</div>
+            <div className="text-[11px] font-mono text-cyan-300">
+              {signal.universeConfidence.total} · {signal.universeConfidence.grade}
+            </div>
+          </div>
+        )}
+
+        {signal.universeConfidence?.components && (
+          <div className="mt-2">
+            <div className="text-[10px] text-terminal-muted uppercase">Confidence breakdown</div>
+            <div className="grid grid-cols-4 gap-x-3 gap-y-0.5 mt-0.5 text-[10px]">
+              {Object.entries(signal.universeConfidence.components).map(([k, v]) => (
+                <div key={k} className="flex justify-between">
+                  <span className="text-terminal-muted capitalize">{k}</span>
+                  <span className="font-mono text-white">{v}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         {signal.winRate != null && (
           <div className="mt-2 flex items-center justify-between bg-terminal-panel2 rounded px-2 py-1">
             <div className="text-[10px] text-terminal-muted uppercase">Live win-rate</div>
@@ -197,4 +310,13 @@ export default function SignalCard({
       </button>
     </div>
   );
+}
+
+/** Compact USD formatting for risk amounts ($1.2k / $48.50 / etc.). */
+function formatMoney(n: number): string {
+  if (!Number.isFinite(n)) return "—";
+  const abs = Math.abs(n);
+  if (abs >= 1000) return `$${(n / 1000).toFixed(1)}k`;
+  if (abs >= 100) return `$${Math.round(n)}`;
+  return `$${n.toFixed(2)}`;
 }

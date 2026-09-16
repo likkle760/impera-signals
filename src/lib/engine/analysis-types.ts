@@ -184,6 +184,41 @@ export interface Signal {
     band: string;
     rr: number;
     rrPass: boolean;
+    /** Per-component confluence breakdown (trend/structure/liquidity/entry/
+     *  momentum/RR/session) so the score is transparent, not a black box. */
+    components?: {
+      trend: number;
+      structure: number;
+      liquidity: number;
+      entry: number;
+      momentum: number;
+      rewardRisk: number;
+      session: number;
+    };
+  };
+  /** Portfolio risk-engine verdict attached to every evaluated trade (§ Risk).
+   *  APPROVED trades carry full sizing + portfolio context; REJECTED trades
+   *  carry the exact reasons (risk limits, correlation, cooldown, daily loss,
+   *  drawdown, stale data, spread, volatility). */
+  riskAnalysis?: {
+    decision: "APPROVED" | "REJECTED";
+    reasons: string[];
+    riskPercent: number;
+    riskAmount: number;
+    positionSize?: {
+      lots: number;
+      units: number;
+      label: string;
+    } | null;
+    perLotRiskUSD: number;
+    projectedOpenRiskPct: number;
+    correlatedExposurePct: number;
+    openTrades: number;
+    maxOpenTrades: number;
+    maxDailyRiskRemainingPct: number;
+    dailyLossPct: number;
+    drawdownPct: number;
+    cooldownActive: boolean;
   };
   /** Win-rate optimizer verdict attached to the signal. */
   optimizerGate?: {
@@ -268,10 +303,39 @@ export interface ScannerRow {
   simulated?: boolean;
 }
 
+/** A signal that was fully drafted but blocked by the portfolio risk engine
+ *  (or the signal gate). Surfaces on the dashboard clearly marked REJECTED so
+ *  the trader can audit WHY a trade did not fire. */
+export interface RejectedSignal {
+  id: string;
+  symbol: string;
+  name: string;
+  assetClass: string;
+  type: SignalType;
+  direction: Direction;
+  entry: number;
+  entryZone: [number, number];
+  stopLoss: number;
+  takeProfits: [number, number, number];
+  riskReward: number;
+  confidence: number;
+  riskLevel: RiskLevel;
+  setupName: string;
+  reason: string;
+  createdAt: number;
+  session: string;
+  simulated?: boolean;
+  /** Exact reasons the trade was blocked (e.g. "Portfolio risk would rise..."). */
+  rejectionReasons: string[];
+}
+
 export interface AnalysisSnapshot {
   timestamp: number;
   instruments: Record<string, InstrumentAnalysis>;
   signals: Signal[];
   futureOpportunities: FutureOpportunity[];
   scanner: ScannerRow[];
+  /** Signals that were drafted but REJECTED by a gate. Never tradable, always
+   *  surfaced for transparency so nobody chases what the risk layer blocked. */
+  rejected?: RejectedSignal[];
 }

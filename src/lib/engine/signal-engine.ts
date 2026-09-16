@@ -697,7 +697,7 @@ export class SignalEngine {
     const extra = draft.reasons.length ? ` — confirmations: ${draft.reasons.join("; ")}` : "";
     const reason = `${reasonLead}.${extra}`;
 
-    const id = `sig-${instrument.symbol}-${timeNow}-${Math.floor(Math.random() * 10000)}`;
+    const id = stableSignalId(instrument.symbol, draft.type, direction, entry, stopDist, atrVal);
 
     const signal: Signal = {
       id,
@@ -894,3 +894,37 @@ function shortTermBias(ind: IndicatorLike, price: number): "BUY" | "SELL" | "NEU
 }
 
 type IndicatorLike = InstrumentAnalysis["indicators"]["1m"] | undefined;
+
+/**
+ * STABLE SIGNAL ID (§ risk engine / history)
+ *
+ * The old id was random per scan (`sig-{symbol}-{ts}-{rand}`), so the same
+ * setup re-emitted every scan got a NEW id each time — the ledger could never
+ * transition a signal from ACTIVE → TP1 HIT / SL HIT, and win/loss outcomes
+ * were permanently broken.
+ *
+ * The new id buckets the entry and stop distance by ATR×0.25, so minor tick
+ * wobble keeps the SAME id while a materially different setup (or a different
+ * direction/type/symbol) gets its own. Deterministic hash → identical across
+ * scans → history transitions now work. `createdAt` still records the true
+ * birth timestamp separately.
+ */
+export function stableSignalId(
+  symbol: string,
+  type: SignalType,
+  direction: Direction,
+  entry: number,
+  stopDist: number,
+  atr: number
+): string {
+  const bucket = Math.max(atr * 0.25, 1e-12);
+  const entryBucket = Math.max(1, Math.round(entry / bucket));
+  const stopBucket = Math.max(1, Math.round(stopDist / bucket));
+  const raw = `${symbol}|${type}|${direction}|${entryBucket}|${stopBucket}`;
+  let hash = 0;
+  for (let i = 0; i < raw.length; i++) {
+    hash = ((hash << 5) - hash + raw.charCodeAt(i)) | 0;
+  }
+  const h = (hash >>> 0).toString(36).slice(0, 8);
+  return `sig-${symbol}-${h}-${entryBucket}x${stopBucket}`;
+}

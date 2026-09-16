@@ -1,5 +1,6 @@
 import type { Candle, Direction } from "../../types";
 import { SwingConfig, DEFAULT_SWING_CONFIG, configForAssetClass } from "./config";
+import { swingConfigForSymbol } from "./../market/asset-config";
 import { SwingStructure } from "./structure";
 import { SwingSupportResistance, ZoneResult } from "./support-resistance";
 import {
@@ -54,7 +55,8 @@ export class SwingSignalEngine {
     outConfig: SwingConfig
   ): SwingSignal | null {
     const { symbol, assetClass, hour4, daily, now } = input;
-    const cfg = configForAssetClass(outConfig, assetClass);
+    const baseCfg = configForAssetClass(outConfig, assetClass);
+    const cfg = swingConfigForSymbol(baseCfg, symbol, assetClass);
     const price = hour4[upto4h].close;
     const dailyCloses = daily.slice(0, uptoDaily + 1).map((c) => c.close);
     const atr4h = atrAt(hour4, upto4h);
@@ -218,7 +220,7 @@ export class SwingSignalEngine {
 
   /** Convenience: evaluate using the FULL available bars as "current". */
   evaluate(input: SwingAnalysisInput): SwingSignal {
-    const cfg = configForAssetClass(this.config, input.assetClass);
+    const cfg = swingConfigForSymbol(configForAssetClass(this.config, input.assetClass), input.symbol, input.assetClass);
     const upto4h = input.hour4.length - 1;
     const uptoDaily = input.daily.length - 1;
     if (upto4h < 40 || uptoDaily < 60) {
@@ -230,7 +232,7 @@ export class SwingSignalEngine {
 
   /** Run the full evaluate() but for a historical bar index `upto4h`. */
   evaluateAt(input: SwingAnalysisInput, upto4h: number, uptoDaily: number): SwingSignal {
-    const cfg = configForAssetClass(this.config, input.assetClass);
+    const cfg = swingConfigForSymbol(configForAssetClass(this.config, input.assetClass), input.symbol, input.assetClass);
     if (upto4h < 40 || uptoDaily < 60) {
       return noDataSignal(input, cfg);
     }

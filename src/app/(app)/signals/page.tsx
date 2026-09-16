@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import { useMarketState } from "@/lib/hooks/use-market-store";
 import { decimalsFor } from "@/lib/formatting";
 import SignalCard from "@/components/SignalCard";
-import { formatTime } from "@/lib/utils";
+import { formatPrice, formatTime } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { Zap, Signal, Activity, Filter, Send, Search } from "lucide-react";
 import { StatCard } from "@/components/ui";
@@ -40,6 +40,7 @@ export default function SignalsPage() {
   const [q, setQ] = useState("");
 
   const allSignals = state.snapshot.signals;
+  const rejected = state.snapshot.rejected ?? [];
   const statuses = useMemo(
     () => ["All", ...Array.from(new Set(allSignals.map((s) => s.status)))],
     [allSignals]
@@ -79,7 +80,8 @@ export default function SignalsPage() {
             </h1>
             <p className="text-terminal-muted mt-2 max-w-xl">
               Filtered, high-confluence institutional setups. Every signal is backed by
-              multi-timeframe SMC/ICT confluence and live market data. Symbols marked
+              multi-timeframe SMC/ICT confluence and live market data — and every trade is
+              sized and checked against the account by the risk engine. Symbols marked
               SIM run on a simulated fallback feed (e.g. gold when OANDA is offline).
             </p>
           </div>
@@ -188,6 +190,65 @@ export default function SignalsPage() {
           </div>
         )}
       </motion.div>
+
+      {/* Risk-rejected setups — surfaced for transparency, never tradable */}
+      {rejected.length > 0 && (
+        <motion.div variants={item}>
+          <div className="flex items-center gap-2 mb-3">
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wider bg-rose-500/15 text-rose-300 border border-rose-400/40">
+              RISK REJECTED
+            </span>
+            <span className="text-caption text-terminal-muted">
+              {rejected.length} setup(s) were drafted but blocked by the risk engine — shown so you can
+              audit why a trade did not fire.
+            </span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+            {rejected.map((r) => (
+              <div
+                key={r.id}
+                className="panel overflow-hidden border-rose-500/20 opacity-80"
+                style={{ borderTopWidth: 3, borderTopColor: r.direction === "BUY" ? "#10b981" : "#f43f5e" }}
+              >
+                <div className="p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-white">{r.symbol}</span>
+                      <span className="badge bg-rose-500/15 text-rose-300 border-rose-400/40">{r.type}</span>
+                    </div>
+                    {r.simulated && (
+                      <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold border bg-slate-500/15 text-slate-300 border-slate-400/40">
+                        SIM
+                      </span>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-[11px] mt-2">
+                    <div>
+                      <div className="text-[9px] text-terminal-muted uppercase">Entry</div>
+                      <div className="font-mono text-white">
+                        {formatPrice(r.entryZone[0], decimalsFor(r.symbol))}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[9px] text-terminal-muted uppercase">Stop</div>
+                      <div className="font-mono text-rose-400">{formatPrice(r.stopLoss, decimalsFor(r.symbol))}</div>
+                    </div>
+                    <div>
+                      <div className="text-[9px] text-terminal-muted uppercase">Conf</div>
+                      <div className="font-mono text-sky-300">{r.confidence}</div>
+                    </div>
+                  </div>
+                  <ul className="mt-2 space-y-0.5">
+                    {r.rejectionReasons.map((reason, i) => (
+                      <li key={i} className="text-[10px] leading-snug text-rose-200/80">✕ {reason}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+      )}
 
       {/* Telegram CTA */}
       <motion.div variants={item}>
