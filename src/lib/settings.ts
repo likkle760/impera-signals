@@ -14,9 +14,11 @@ export interface UserSettings {
   telegramEnabled: boolean;
   /** Max number of Telegram signals sent per single scan (spam guard). */
   telegramMaxPerScan: number;
-  /** OPT-IN aggressive mode: fire more frequent market + swing signals (relaxes
-   *  accuracy gates). Keeps trend-alignment so it never fades the trend, but is
-   *  higher-risk. Default OFF = strict, high-conviction signals only. */
+  /** Higher-frequency mode: fire more MARKET, SWING and LIMIT signals (relaxes
+   *  accuracy gates — trend strength + momentum). Hard HTF trend-alignment still
+   *  applies in BOTH modes, so it NEVER fades the higher-timeframe trend. This is
+   *  now the recommended default so the feed always has setups; higher-risk than
+   *  strict mode, so traders wanting only A-grade setups can switch it off. */
   moreSignals: boolean;
   /** Funded-account (prop firm) eval parameters — discipline/pacing targets, not guarantees. */
   propAccountSize: number;
@@ -56,7 +58,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   dataMode: "live",
   telegramEnabled: true,
   telegramMaxPerScan: 1,
-  moreSignals: false,
+  moreSignals: true,
   propAccountSize: 10000,
   propMaxLossPct: 10,
   propDailyLossPct: 5,
@@ -75,7 +77,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   perfMode: false
 };
 
-const KEY = "impera.settings.v5";
+const KEY = "impera.settings.v6";
 
 export function loadSettings(): UserSettings {
   if (typeof window === "undefined") return DEFAULT_SETTINGS;

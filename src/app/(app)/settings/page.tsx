@@ -127,10 +127,11 @@ export default function SettingsPage() {
             <div className="mb-1">
               <Toggle label="More Signals (High Volume)" value={s.moreSignals} onChange={(v) => update({ moreSignals: v })} />
             </div>
-            <p className="text-[11px] text-amber-300/80 leading-snug">
-              Higher-frequency MARKET, SWING and LIMIT signals on gold/silver/FX. Relaxes strict filters
-              (trend strength + momentum) but NEVER fades the higher-timeframe trend. Higher risk — choose if
-              you want frequent setups.
+            <p className="text-[11px] text-terminal-muted leading-snug">
+              <span className="text-cyan-300 font-semibold">Default ON</span> — fires a steady flow of MARKET, SWING
+              and LIMIT signals on gold/silver/FX. Relaxes some strict filters (trend strength + momentum), but the
+              hard trend lock is ALWAYS active so it never fades the higher-timeframe trend. Turn off for rare,
+              A-grade-only setups.
             </p>
           </div>
         </section>

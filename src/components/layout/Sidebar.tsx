@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Badge } from "@/components/ui";
+import { NewsCalendar } from "@/components/NewsCalendar";
 import {
   LayoutDashboard,
   Zap,
@@ -213,6 +214,11 @@ export default function Sidebar() {
             </div>
           );
         })}
+      </div>
+
+      {/* News calendar — always visible while navigating */}
+      <div className="mb-4">
+        <NewsCalendar />
       </div>
 
       <div className="mt-auto p-3">

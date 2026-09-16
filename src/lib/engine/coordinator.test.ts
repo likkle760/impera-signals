@@ -110,6 +110,13 @@ describe("AnalysisCoordinator + DemoMarketDataProvider integration", () => {
     }
   });
 
+  it("defaults to high-volume signal mode so the signal feed is never empty", async () => {
+    const { DEFAULT_SETTINGS } = await import("../settings");
+    // Default ON (was OFF) so the feed always has setups; the hard trend lock
+    // applies in BOTH modes, so high volume never means counter-trend trades.
+    expect(DEFAULT_SETTINGS.moreSignals).toBe(true);
+  });
+
   it("keeps swing thresholds tuned to actually produce trend-aligned swing trades", async () => {
     const { DEFAULT_SWING_CONFIG } = await import("./swing/config");
     // Relaxed baseline (was 80/70) so genuine pullback setups on a real daily
