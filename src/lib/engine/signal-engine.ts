@@ -218,7 +218,44 @@ export class SignalEngine {
     const swing = this.buildSwingDraft(instrument, analysis);
     if (swing) drafts.push(swing);
 
-    return drafts;
+    // HARD TREND-ALIGNMENT LOCK — applied to EVERY draft before it leaves.
+    // This is the layer that catches the modular SCALP engine too: previously
+    // its verdict flowed straight through with no higher-timeframe alignment
+    // check, so a momentary 5m/15m bounce in a bearish daily trend could
+    // produce a counter-trend BUY that then got run over when the trend
+    // resumed. Now nothing that fades a clear HTF trend is ever emitted.
+    return drafts.map((d) => this.alignWithHTFTrend(d, analysis));
+  }
+
+  /**
+   * HARD TREND-ALIGNMENT LOCK (final guard on every draft type).
+   *
+   * Never emit a BUY while the higher-timeframe trend is bearish, nor a SELL
+   * while it is bullish — fading the daily/4H trend for a short-timeframe
+   * bounce is the single biggest source of discretionary losses. Applies to
+   * scalp, market, limit and swing drafts alike.
+   *
+   * - Clear HTF (bullish XOR bearish) + opposing direction → converted to a
+   *   COUNTER-TREND no-trade draft so the UI explains WHY nothing fired.
+   * - Neutral/conflicting HTF → left untouched: not counter-trend, and the
+   *   confidence + institutional gates still protect those entries.
+   * - Existing no-trade drafts are preserved verbatim (original reason kept).
+   */
+  private alignWithHTFTrend(draft: DraftSignal, analysis: InstrumentAnalysis): DraftSignal {
+    if (draft.noTrade) return draft;
+    const htf = (analysis.trend.higherTimeframe || "").toUpperCase();
+    const htfBull = htf.includes("BULLISH");
+    const htfBear = htf.includes("BEARISH");
+    if (htfBull === htfBear) return draft; // no clear HTF trend → not counter-trend
+    const aligned = draft.direction === "BUY" ? htfBull : htfBear;
+    if (aligned) return draft;
+    return {
+      ...draft,
+      noTrade: "COUNTER-TREND",
+      reasons: [
+        `${draft.direction === "BUY" ? "HTF bearish" : "HTF bullish"} — never fade the higher-timeframe trend.`
+      ]
+    };
   }
 
   /**

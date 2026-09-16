@@ -86,6 +86,38 @@ describe("AnalysisCoordinator + DemoMarketDataProvider integration", () => {
     }
   });
 
+  it("NEVER emits a counter-trend signal against the higher-timeframe trend (hard trend lock)", async () => {
+    const provider = new DemoMarketDataProvider();
+    await provider.start();
+    const coordinator = new AnalysisCoordinator({
+      ...DEFAULT_ANALYSIS_CONFIG,
+      moreSignals: false,
+      allowSimulatedSignals: true
+    });
+    const snapshot = coordinator.analyze(provider);
+    provider.stop();
+
+    // Universal invariant, valid on every demo day: a BUY may ONLY appear when
+    // the higher-timeframe trend is NOT bearish, and a SELL only when it is NOT
+    // bullish. Fading a clear HTF trend causes the counter-trend bounce losses.
+    for (const signal of snapshot.signals) {
+      const htf = (snapshot.instruments[signal.symbol]?.trend.higherTimeframe || "").toUpperCase();
+      const bull = htf.includes("BULLISH");
+      const bear = htf.includes("BEARISH");
+      if (bull === bear) continue; // neutral/conflicting HTF — not counter-trend
+      if (bear) expect(signal.direction).not.toBe("BUY");
+      if (bull) expect(signal.direction).not.toBe("SELL");
+    }
+  });
+
+  it("keeps swing thresholds tuned to actually produce trend-aligned swing trades", async () => {
+    const { DEFAULT_SWING_CONFIG } = await import("./swing/config");
+    // Relaxed baseline (was 80/70) so genuine pullback setups on a real daily
+    // trend qualify — the daily-trend alignment + pullback + RR guards remain.
+    expect(DEFAULT_SWING_CONFIG.confidenceThresholds.strongScore).toBe(76);
+    expect(DEFAULT_SWING_CONFIG.confidenceThresholds.noTradeScore).toBe(66);
+  });
+
   it("reuses derived analysis across scans while the candle window is unchanged (event-driven cache)", async () => {
     const provider = new DemoMarketDataProvider();
     await provider.start();

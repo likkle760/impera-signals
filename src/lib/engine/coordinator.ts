@@ -220,6 +220,45 @@ export class AnalysisCoordinator {
       if (drafts.some((d) => d && !d.noTrade)) {
         for (const draft of drafts) {
           if (!draft || draft.noTrade) continue;
+
+          // ── HARD TREND LOCK ──
+          // Belt-and-suspenders behind the per-draft alignment gate inside
+          // detect(): if anything still reaches approval here that fades a
+          // clear higher-timeframe trend, it is REJECTED and surfaced so the
+          // trader sees exactly why no counter-trend BUY/SELL ever fires.
+          const htfLock = (analysis.trend.higherTimeframe || "").toUpperCase();
+          const htfLockBull = htfLock.includes("BULLISH");
+          const htfLockBear = htfLock.includes("BEARISH");
+          if (
+            htfLockBull !== htfLockBear &&
+            ((draft.direction === "BUY" && htfLockBear) || (draft.direction === "SELL" && htfLockBull))
+          ) {
+            snapshot.rejected!.push({
+              id: `rej-htf-${instrument.symbol}-${draft.type}`,
+              symbol: instrument.symbol,
+              name: instrument.name,
+              assetClass: instrument.assetClass,
+              type: draft.type,
+              direction: draft.direction,
+              entry: analysis.price,
+              entryZone: [analysis.price, analysis.price],
+              stopLoss: analysis.price - (analysis.atr || analysis.price * 0.002),
+              takeProfits: [0, 0, 0],
+              riskReward: 0,
+              confidence: this.signalEngine.score(instrument, analysis, draft),
+              riskLevel: "LOW",
+              setupName: draft.type,
+              reason: "COUNTER-TREND",
+              createdAt: now,
+              session: analysis.session,
+              simulated: analysis.simulated,
+              rejectionReasons: [
+                `HTF ${htfLockBear ? "bearish" : "bullish"} — never fade the higher-timeframe trend.`
+              ]
+            });
+            continue;
+          }
+
           const score = this.signalEngine.score(instrument, analysis, draft);
           const isLimit = draft.type.includes("LIMIT");
           const minForThis = this.scoreFloorFor(isLimit, analysis);

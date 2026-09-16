@@ -88,8 +88,14 @@ type DeepPartial<T> = {
 
 export const DEFAULT_SWING_CONFIG: SwingConfig = {
   confidenceThresholds: {
-    strongScore: 80,
-    noTradeScore: 70
+    // Baseline swing threshold (also the STRICT-mode engine used in live
+    // non-aggressive runs). Tuned low enough that healthy pullback setups in a
+    // real daily trend actually qualify (the engine keeps the daily-trend
+    // alignment + pullback-zone + reward:risk guards), while high enough that
+    // marginal score 60-ish noise still sits out. Fading a real trend is still
+    // impossible — the direction comes from the daily/4H trend itself.
+    strongScore: 76,
+    noTradeScore: 66
   },
   trend: {
     emaFast: 50,
