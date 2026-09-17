@@ -54,7 +54,10 @@ export default function SignalsPage() {
     return s.sort((a, b) => b.confidence - a.confidence);
   }, [allSignals, filter, status, q]);
 
-  const active = allSignals.filter((x) => x.status === "ACTIVE" || x.status === "TRIGGERED");
+  const active = allSignals.filter(
+    (x) => x.status === "ACTIVE" || x.status === "TRIGGERED" || x.status === "WAITING"
+  );
+  const waitingLimits = allSignals.filter((x) => x.status === "WAITING").length;
   const avgConfidence = allSignals.length
     ? Math.round(allSignals.reduce((a, s) => a + s.confidence, 0) / allSignals.length)
     : 0;
@@ -95,7 +98,7 @@ export default function SignalsPage() {
       {/* Stats strip */}
       <motion.div variants={item} className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard label="Total Signals" value={allSignals.length} icon={<Signal className="w-5 h-5" />} variant="accent" />
-        <StatCard label="Active Now" value={active.length} icon={<Zap className="w-5 h-5" />} variant="success" />
+        <StatCard label="Active / Ready" value={active.length} icon={<Zap className="w-5 h-5" />} variant="success" trendValue={`${waitingLimits} waiting limits`} />
         <StatCard label="High Confidence" value={highConf} icon={<Activity className="w-5 h-5" />} variant="warning" />
         <StatCard label="Avg Confidence" value={avgConfidence} unit="%" icon={<Filter className="w-5 h-5" />} variant="info" />
       </motion.div>

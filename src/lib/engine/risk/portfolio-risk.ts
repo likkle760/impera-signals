@@ -127,10 +127,13 @@ export class PortfolioRiskEngine {
 
     // Spread as a % of the stop distance. A spread that eats too much of the
     // planned stop makes the stop placement unreliable (and adds hidden cost).
+    // SIM/observation signals are exempt — they're demo-only and untradeable,
+    // and the demo feed's micro-ATR makes demo spreads look unrealistically
+    // large relative to stops (see SIM halts exemption below).
     if (stopDist > 0 && input.spread > 0) {
       const spreadToStop = input.spread / stopDist;
       notes.push(`Spread ${input.spread.toFixed(2)} = ${(spreadToStop * 100).toFixed(1)}% of stop distance.`);
-      if (spreadToStop > L.maxSpreadToStopPct) {
+      if (spreadToStop > L.maxSpreadToStopPct && !input.simulated) {
         problems.push(
           `Spread is ${(spreadToStop * 100).toFixed(1)}% of the stop distance (limit ${(L.maxSpreadToStopPct * 100).toFixed(0)}%) — execution unreliable, trade blocked.`
         );

@@ -39,7 +39,13 @@ export default function DashboardPage() {
   const futures = snapshot.futureOpportunities;
 
   const scanned = instruments.length;
-  const active = signals.filter((s) => s.status === "ACTIVE" || s.status === "TRIGGERED");
+  // "Live setups" = any emitted signal that is actionable: ACTIVE market/scalp/
+  // swing entries plus WAITING resting limits (they're ready to fill on a
+  // pullback). Only terminal/TYPE-resolved statuses are excluded.
+  const live = signals.filter(
+    (s) => s.status === "ACTIVE" || s.status === "TRIGGERED" || s.status === "WAITING"
+  );
+  const active = live;
   const topActive = [...active]
     .sort((a, b) => b.confidence - a.confidence)
     .slice(0, 3);
@@ -287,7 +293,7 @@ export default function DashboardPage() {
                 <div>
                   <h2 className="text-heading-md font-bold text-terminal-text">Active Signals</h2>
                   <p className="text-caption text-terminal-muted">
-                    {active.length} active • {signals.length - active.length} in analysis
+                    {active.length} live setups • {signals.length} total
                   </p>
                 </div>
               </div>

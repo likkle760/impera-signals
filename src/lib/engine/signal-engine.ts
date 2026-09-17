@@ -285,8 +285,8 @@ export class SignalEngine {
     // the user opted into it.
     const swingEngine = this.config.moreSignals
       ? new SwingSignalEngine({
-          confidenceThresholds: { strongScore: 68, noTradeScore: 55 },
-          trend: { emaFast: 50, emaSlow: 200, emaTrend: 200, adxMin: 15 },
+          confidenceThresholds: { strongScore: 60, noTradeScore: 48 },
+          trend: { emaFast: 50, emaSlow: 200, emaTrend: 200, adxMin: 12 },
           risk: { minRewardRisk: 1.5, stopBufferAtr: 1.3, tp1R: 2, tp2R: 3, defaultRiskPct: 0.5, stopMaxAtr: 6, stopMinAtr: 0.8 },
           momentum: { rsiRecovery: 45, relaxMomentum: true },
           volatility: { atrPctFloor: 0.004, atrPctCeil: 0.1 },
@@ -331,9 +331,13 @@ export class SignalEngine {
 
     const scalpEngine = this.config.moreSignals
       ? new ScalpSignalEngine({
-          scoring: { strongScore: 70, minScore: 55 },
-          spread: { maxSpreadToStop: 0.3 },
-          regime: { atrPctFloor: 0.001, atrPctCeil: 0.02, adxMin: 15 },
+          scoring: { strongScore: 70, minScore: 45 },
+          spread: { maxSpreadToStop: 0.5 },
+          // Very low volatility floor: SIM demo ATR% is tiny (~0.005% on FX),
+          // so the 0.1% floor previously blanked every scalp. In this HIGH
+          // VOLUME default mode we only need the trend lock + risk engine to
+          // protect the account (which still apply to real/live symbols).
+          regime: { atrPctFloor: 0.00002, atrPctCeil: 0.02, adxMin: 10 },
           news: { enabled: true, blackoutBeforeMs: 15 * 60 * 1000, blackoutAfterMs: 5 * 60 * 1000, eventTimes: upcomingHighImpactTimes(instrument.symbol) }
         })
       : this.scalpEngine;

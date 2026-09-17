@@ -240,6 +240,16 @@ describe("PortfolioRiskEngine — data-quality guards", () => {
     expect(d.problems.join(" ")).toMatch(/Spread is/);
   });
 
+  it("EXEMPTS SIM/observation signals from the spread-to-stop block (demo ATR is unrealistic)", () => {
+    const eng = new PortfolioRiskEngine({ ...DEFAULT_RISK_LIMITS, maxSpreadToStopPct: 0.25 });
+    // Same horrific spread/stop ratio as above, but SIM — must still be APPROVED
+    // so the demo observation feed can show scalp/swing/limit setups (SIM
+    // signals are untradeable and never reach a real broker).
+    const d = eng.evaluate(baseInput({ spread: 0.001, simulated: true }));
+    expect(d.decision).toBe("APPROVED");
+    expect(d.problems.some((p) => /Spread is/.test(p))).toBe(false);
+  });
+
   it("rejects abnormal volatility", () => {
     const eng = new PortfolioRiskEngine({ ...DEFAULT_RISK_LIMITS, maxVolatilityScore: 60 });
     const d = eng.evaluate(baseInput({ volatilityScore: 90 }));

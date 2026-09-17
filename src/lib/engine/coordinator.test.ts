@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { DemoMarketDataProvider } from "../providers/demo";
 import { AnalysisCoordinator, DEFAULT_ANALYSIS_CONFIG } from "./coordinator";
+import { ScalpSignalEngine } from "./scalp";
 
 describe("AnalysisCoordinator + DemoMarketDataProvider integration", () => {
   it("produces scanner rows and at least some signals/futures", async () => {
@@ -123,6 +124,68 @@ describe("AnalysisCoordinator + DemoMarketDataProvider integration", () => {
     // trend qualify — the daily-trend alignment + pullback + RR guards remain.
     expect(DEFAULT_SWING_CONFIG.confidenceThresholds.strongScore).toBe(76);
     expect(DEFAULT_SWING_CONFIG.confidenceThresholds.noTradeScore).toBe(66);
+  });
+
+  it("relaxed scalp config (the default high-volume engine) trades a real micro-trend", () => {
+    // Deterministic synthetic series: a clean uptrend with realistic micro
+    // ATR% (~0.03% per bar) — exactly the regime the OLD 0.1% volatility floor
+    // blanked as "volatility too low for costs", which is why demo scalps never
+    // fired. The relaxed config used by the coordinator must now trade it.
+    const M1 = 60_000;
+    const makeCandle = (i: number, open: number, close: number): { time: number; open: number; high: number; low: number; close: number; volume: number } => ({
+      time: i * M1,
+      open,
+      high: Math.max(open, close) + 0.01,
+      low: Math.min(open, close) - 0.01,
+      close,
+      volume: 1000
+    });
+    const m1: any[] = [];
+    let price = 100;
+    for (let i = 0; i < 920; i++) {
+      const inLeg = i % 10 < 6;
+      const delta = inLeg ? 0.05 : -0.005;
+      const open = price;
+      const close = price + delta;
+      m1.push(makeCandle(i, open, close));
+      price = close;
+    }
+    const aggregate = (candles: any[], per: number) => {
+      const out: any[] = [];
+      for (let i = 0; i < candles.length; i += per) {
+        const group = candles.slice(i, i + per);
+        const last = group[group.length - 1];
+        out.push({
+          time: last.time,
+          open: group[0].open,
+          high: Math.max(...group.map((c) => c.high)),
+          low: Math.min(...group.map((c) => c.low)),
+          close: last.close,
+          volume: group.reduce((a, c) => a + c.volume, 0)
+        });
+      }
+      return out;
+    };
+    const m5 = aggregate(m1, 5);
+    const m15 = aggregate(m1, 15);
+
+    const relaxed = new ScalpSignalEngine({
+      scoring: { strongScore: 70, minScore: 45 },
+      spread: { maxSpreadToStop: 0.5 },
+      regime: { atrPctFloor: 0.00002, atrPctCeil: 0.02, adxMin: 10 },
+      news: { enabled: false, blackoutBeforeMs: 0, blackoutAfterMs: 0, eventTimes: [] }
+    });
+    const sig = relaxed.evaluate({
+      symbol: "EURUSD",
+      assetClass: "forex",
+      context: m15,
+      setup: m5,
+      entry: m1,
+      spread: 0.0002,
+      price: m1[m1.length - 1].close,
+      now: m1.length * M1
+    });
+    expect(["BUY", "STRONG BUY"]).toContain(sig.verdict);
   });
 
   it("reuses derived analysis across scans while the candle window is unchanged (event-driven cache)", async () => {
