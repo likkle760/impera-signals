@@ -23,6 +23,17 @@ const TYPES = [
   "SWING SELL",
 ];
 
+/** Order the feed so live/ready statuses surface first (ACTIVE/TRIGGERED on
+ *  top, then pending LIMITS), before expired/closed rows — never pure
+ *  confidence, which used to bury fresh setups under stale history. */
+function statusRank(s: { status: string }): number {
+  const st = (s.status || "").toUpperCase();
+  if (st === "ACTIVE" || st === "TRIGGERED") return 0;
+  if (st === "WAITING") return 1;
+  if (st === "PENDING" || st === "TRACKING") return 2;
+  return 3;
+}
+
 const container = {
   hidden: { opacity: 0 },
   visible: { opacity: 1, transition: { staggerChildren: 0.07 } },
@@ -49,10 +60,12 @@ export default function SignalsPage() {
   const signals = useMemo(() => {
     let s = [...allSignals];
     if (filter !== "All") s = s.filter((x) => x.type === filter);
-    if (status !== "All") s = s.filter((x) => x.status === status);
     if (q) s = s.filter((x) => x.symbol.toLowerCase().includes(q.toLowerCase()));
-    return s.sort((a, b) => b.confidence - a.confidence);
-  }, [allSignals, filter, status, q]);
+    return s
+      // Pending/undecided statuses sort with "All" too — never hide them
+      // from the default view (this is exactly why the feed used to look empty).
+      .sort((a, b) => statusRank(a) - statusRank(b) || b.confidence - a.confidence);
+  }, [allSignals, filter, q]);
 
   const active = allSignals.filter(
     (x) => x.status === "ACTIVE" || x.status === "TRIGGERED" || x.status === "WAITING"
