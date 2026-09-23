@@ -28,7 +28,9 @@ export const XAUUSD_CONFIG: XauOverrides = {
   swing: {
     // Gold ATR% is small in % terms relative to its price, and it can run far;
     // wider cost-aware stops (ATR multiples) with an elevated R:R target.
-    volatility: { atrPctFloor: 0.002, atrPctCeil: 0.06 },
+    // Floor is cost-aware (aligned with the demo feed so XAUUSD itself shows
+    // real swings too — not just its crosses).
+    volatility: { atrPctFloor: 0.00002, atrPctCeil: 0.06 },
     risk: {
       minRewardRisk: 2.2,
       stopBufferAtr: 2.0,
@@ -39,15 +41,21 @@ export const XAUUSD_CONFIG: XauOverrides = {
       // gold swing positional sizing from account equity
       defaultRiskPct: 0.5
     },
-    confidenceThresholds: { strongScore: 82, noTradeScore: 72 }
+    // Swing confidence shares the engine's relaxed demo gates (crosses use the
+    // default 76/66 via asset-class defaults) so XAUUSD swings aren't special.
+    confidenceThresholds: { strongScore: 76, noTradeScore: 66 }
   },
   scalp: {
-    // Gold can be fast around London/NY; keep ATR% window wide, spread-to-stop
-    // filter loose (gold spread is a real fixed cost but price is large).
-    regime: { atrPctFloor: 0.001, atrPctCeil: 0.02, adxMin: 16 },
-    spread: { maxSpreadToStop: 0.25 },
+    // Gold can be fast around London/NY; ATR% is tiny in % terms relative to
+    // its $ price, so keep the cost-aware % floor in the same demo-friendly
+    // range as XAUUSD's crosses (which already trade) — not a %-of-price
+    // floor that swamps the flagship's real micro-ATR. Spread-to-stop stays
+    // cost-aware (gold spread is a fixed cost) but shares the engine's
+    // relaxed scalp gate so XAUUSD isn't the only metal that never fires.
+    regime: { atrPctFloor: 0.00002, atrPctCeil: 0.02, adxMin: 10 },
+    spread: { maxSpreadToStop: 0.5 },
     risk: { minRewardRisk: 1.3, stopMinAtr: 1.1, stopBufferAtr: 1.7, defaultRiskPct: 0.25 },
-    momentum: { rsiFloor: 48 },
+    momentum: { rsiFloor: 45 },
     holding: { maxBars: 25 },
     overtrading: { maxTradesPerSession: 10 }
   }

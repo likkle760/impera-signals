@@ -209,7 +209,7 @@ describe("XAUUSD config", () => {
     expect(isGoldSymbol("EURUSD")).toBe(false);
   });
   it("provides gold-specific params distinct from forex defaults", () => {
-    expect(XAUUSD_CONFIG.scalp.spread?.maxSpreadToStop).toBe(0.25);
+    expect(XAUUSD_CONFIG.scalp.spread?.maxSpreadToStop).toBe(0.5);
     expect(XAUUSD_CONFIG.swing.risk?.minRewardRisk).toBe(2.2);
   });
 });
