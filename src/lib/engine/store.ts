@@ -25,6 +25,10 @@ export interface MarketStoreState {
   lastMarketUpdate: number;
   lastAnalysis: number;
   lastScanStart: number;
+  /** Live terminal controls — runtime-adjustable, no reload required. */
+  scanSeconds: number;
+  autoScan: boolean;
+  scanCount: number;
   instruments: string[];
   session: string;
   error: string | null;
@@ -99,6 +103,9 @@ export class MarketStore {
       lastMarketUpdate: 0,
       lastAnalysis: 0,
       lastScanStart: 0,
+      scanSeconds: this.config.scanSeconds ?? 60,
+      autoScan: true,
+      scanCount: 0,
       instruments: this.provider.getSymbols().map((s) => s.symbol),
       session: "",
       error: null
@@ -164,12 +171,41 @@ export class MarketStore {
     // news (non-blocking; keeps last-good calendar on failure).
     void refreshNewsCalendar().catch(() => {});
     this.runScan();
-    const scanIntervalSec = this.config.scanSeconds ?? 30;
-    this.scanTimer = setInterval(() => this.runScan(), scanIntervalSec * 1000);
+    this.restartScanTimer();
+  }
+
+  /** (Re)start the auto-scan interval from the CURRENT config/state. */
+  private restartScanTimer() {
+    if (this.scanTimer) {
+      clearInterval(this.scanTimer);
+      this.scanTimer = null;
+    }
+    if (!this.state.autoScan) return;
+    const sec = Math.max(5, Math.min(300, this.config.scanSeconds ?? 60));
+    this.scanTimer = setInterval(() => this.runScan(), sec * 1000);
+  }
+
+  /** Runtime scan interval (5–300s). Takes effect immediately, no reload. */
+  setScanInterval(seconds: number) {
+    const sec = Math.max(5, Math.min(300, Math.round(seconds)));
+    this.config.scanSeconds = sec;
+    this.setState({ scanSeconds: sec });
+    this.restartScanTimer();
+  }
+
+  /** Pause/resume the live auto-scan loop. Manual `runScan()` still works. */
+  setAutoScan(enabled: boolean) {
+    this.setState({ autoScan: enabled });
+    this.restartScanTimer();
+  }
+
+  toggleAutoScan() {
+    this.setAutoScan(!this.state.autoScan);
   }
 
   stop() {
     if (this.scanTimer) clearInterval(this.scanTimer);
+    this.scanTimer = null;
     this.provider.stop();
   }
 
@@ -177,7 +213,7 @@ export class MarketStore {
     const start = Date.now();
     // Keep the news calendar warm each scan (throttled internally).
     void refreshNewsCalendar().catch(() => {});
-    this.setState({ lastScanStart: start });
+    this.setState({ lastScanStart: start, scanCount: this.state.scanCount + 1 });
     this.telegramLastScanKey = `${start}`;
     this.telegramSentThisScan = 0;
     this.swingTelegramSentThisScan = 0;

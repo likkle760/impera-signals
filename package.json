@@ -9,7 +9,8 @@
     "start": "next start",
     "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "quant:backtest": "vite-node scripts/quant-backtest.ts"
   },
   "dependencies": {
     "framer-motion": "^13.1.1",

@@ -5,7 +5,8 @@ import { loadJournal } from "@/lib/engine/journal";
 import { pipsGained, pipSizeFor } from "@/lib/engine/pips";
 import { StatCard, PageHeader } from "@/components/ui";
 import { motion } from "framer-motion";
-import { BarChart3, PieChart, Target, Activity, Wallet, AlertTriangle } from "lucide-react";
+import { BarChart3, PieChart, Target, Activity, Wallet, AlertTriangle, TrendingUp, Gauge, LineChart } from "lucide-react";
+import { computeQuantMetrics, rFromOutcome } from "@/lib/quant/metrics";
 
 type SignalTypeKey = "BUY LIMIT" | "SELL LIMIT" | "MARKET BUY" | "MARKET SELL" | "SWING BUY" | "SWING SELL" | "OTHER";
 
@@ -103,7 +104,19 @@ export default function AnalyticsPage() {
     return [...map.values()].sort((a, b) => b.totalPips - a.totalPips);
   }, []);
 
+  // Quant metrics in R-multiples from settled signal-history outcomes. Won
+  // signals realize their configured R:R; lost/invalidated realize -1R.
+  const quant = useMemo(() => {
+    const settled = history.filter(
+      (h) => h.outcome === "won" || h.outcome === "lost" || h.outcome === "invalidated" || h.outcome === "expired"
+    );
+    return computeQuantMetrics({
+      r: settled.map((h) => rFromOutcome(h.outcome, h.riskReward, h.type))
+    });
+  }, [history]);
+
   const bar = (v: number, max: number) => Math.max(4, Math.round((v / max) * 100));
+  const fin = (v: number, d = 2) => (Number.isFinite(v) ? v.toFixed(d) : "∞");
 
   return (
     <motion.div className="space-y-6" variants={container} initial="hidden" animate="visible">
@@ -130,6 +143,48 @@ export default function AnalyticsPage() {
         <StatCard label="Avg R:R" value={`1:${stats.avgRR.toFixed(1)}`} icon={<Activity className="w-5 h-5" />} variant="warning" />
         <StatCard label="Avg Score" value={stats.avgScore} unit="/100" icon={<Target className="w-5 h-5" />} variant="info" />
         <StatCard label="Journal Pairs" value={pairStats.length} icon={<Wallet className="w-5 h-5" />} variant="accent" sub="from your journal" />
+      </motion.div>
+
+      {/* Quant performance */}
+      <motion.div variants={item} className="card p-5 panel-hover">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="panel-title">QUANT PERFORMANCE</h2>
+            <p className="text-caption-xs text-terminal-muted mt-0.5">Risk-normalized performance in R from {quant.trades} settled signals</p>
+          </div>
+          <LineChart className="w-4 h-4 text-terminal-accent" />
+        </div>
+        {quant.trades === 0 ? (
+          <div className="empty-state py-8">
+            <div className="empty-desc">No settled signals yet. Quant metrics appear here as recorded signals resolve to TP/SL.</div>
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 mb-5">
+              <QuantStat label="Expectancy" value={`${fin(quant.expectancyR)}R`} positive={quant.expectancyR > 0} />
+              <QuantStat label="Profit Factor" value={fin(quant.profitFactor)} positive={quant.profitFactor >= 1} />
+              <QuantStat label="Net R" value={`${quant.netR > 0 ? "+" : ""}${fin(quant.netR)}R`} positive={quant.netR > 0} />
+              <QuantStat label="Max Drawdown" value={`${fin(quant.maxDrawdownR)}R`} positive={false} />
+              <QuantStat label="Sharpe" value={fin(quant.sharpe)} positive={quant.sharpe > 0} />
+              <QuantStat label="Sortino" value={fin(quant.sortino)} positive={quant.sortino > 0} />
+            </div>
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-caption-xs font-semibold text-terminal-muted flex items-center gap-1.5">
+                  <TrendingUp className="w-3.5 h-3.5" /> CUMULATIVE R EQUITY CURVE
+                </span>
+                <span className="text-[11px] text-terminal-muted">W/L streak {quant.longestWinStreak}/{quant.longestLossStreak} · avg hold n/a</span>
+              </div>
+              <EquityCurve values={quant.equityCurve} />
+            </div>
+            <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-[11px] text-terminal-muted">
+              <span><Gauge className="w-3 h-3 inline" /> Win rate <b className="text-terminal-text">{(quant.winRate * 100).toFixed(1)}%</b></span>
+              <span>Avg win <b className="text-emerald-400">+{fin(quant.avgWinR)}R</b></span>
+              <span>Avg loss <b className="text-rose-400">{fin(quant.avgLossR)}R</b></span>
+              <span>Sharpe ann. <b className="text-terminal-text">{fin(quant.sharpeAnnualized)}</b></span>
+            </div>
+          </>
+        )}
       </motion.div>
 
       {/* Win rate by signal type */}
@@ -260,6 +315,40 @@ export default function AnalyticsPage() {
         <BarChart label="Signals by Setup" icon={<Target className="w-3.5 h-3.5" />} data={stats.bySetup} bar={bar} />
       </motion.div>
     </motion.div>
+  );
+}
+
+function QuantStat({ label, value, positive }: { label: string; value: string; positive: boolean }) {
+  return (
+    <div className="panel-section p-3">
+      <div className="text-caption-xs font-semibold text-terminal-muted">{label}</div>
+      <div className={`text-lg font-bold font-mono mt-1 ${positive ? "text-emerald-400" : "text-rose-400"}`}>{value}</div>
+    </div>
+  );
+}
+
+/** Minimal inline SVG sparkline of the cumulative R curve (zero baseline). */
+function EquityCurve({ values }: { values: number[] }) {
+  const w = 600;
+  const h = 90;
+  if (values.length < 2) {
+    return <div className="h-[90px] flex items-center justify-center text-xs text-terminal-muted">Need 2+ settled signals to draw the curve.</div>;
+  }
+  const lo = Math.min(0, ...values);
+  const hi = Math.max(0, ...values);
+  const span = hi - lo || 1;
+  const x = (i: number) => (i / (values.length - 1)) * w;
+  const y = (v: number) => h - ((v - lo) / span) * h;
+  const points = values.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+  const zeroY = y(0);
+  const last = values[values.length - 1];
+  return (
+    <div className="w-full overflow-hidden rounded-lg bg-terminal-panel2/60">
+      <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-[90px]" preserveAspectRatio="none" role="img" aria-label="Cumulative R equity curve">
+        <line x1={0} y1={zeroY} x2={w} y2={zeroY} stroke="#64748b" strokeWidth={1} strokeDasharray="4 4" opacity={0.5} />
+        <polyline points={points} fill="none" stroke={last >= 0 ? "#22c55e" : "#f87171"} strokeWidth={2} vectorEffect="non-scaling-stroke" />
+      </svg>
+    </div>
   );
 }
 

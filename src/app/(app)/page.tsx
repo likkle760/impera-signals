@@ -6,6 +6,7 @@ import { Badge, SignalGrid, StatCard, LiveValue, MotionDiv } from "@/components/
 import { motion } from "framer-motion";
 import { TelegramCta } from "@/components/TelegramCta";
 import { NewsWidget } from "@/components/NewsWidget";
+import { QuantTerminal } from "@/components/QuantTerminal";
 import {
   Zap,
   TrendingUp,
@@ -159,6 +160,9 @@ export default function DashboardPage() {
           </div>
         </div>
       </MotionDiv>
+
+      {/* ============ LIVE QUANT TERMINAL ============ */}
+      <QuantTerminal />
 
       {/* ============ QUICK STATS ============ */}
       <motion.div variants={item} className="grid grid-cols-2 lg:grid-cols-4 gap-4">
